@@ -1574,6 +1574,9 @@ function closeVideoModal() {
 function openVideoModal(bvid) {
   const row = state.rows.find(r => r.bvid === bvid);
   if (!row) return;
+  const modal = document.getElementById('videoModal');
+  modal.dataset.bvid = bvid;
+  ensureCommentsLoaded();
   const body = document.getElementById('modalBody');
   const stats = [['播放', row.view], ['点赞', row.like], ['投币', row.coin], ['弹幕', row.danmaku], ['评论', row.reply], ['收藏', row.favorite], ['分享', row.share]];
   const tags = (row.tags || []).map(t => `<span class="pill">${esc(t.name)}</span>`).join(' ');
@@ -1587,11 +1590,11 @@ function openVideoModal(bvid) {
     <div class="comment">
       <div class="comment-head"><span class="comment-rank">${i + 1}</span><b>${esc(c.name)}</b><span class="mini">👍 ${numberFormat(c.like)}</span></div>
       <div class="comment-msg">${esc(c.message)}</div>
-      ${(c.replies || []).map(r => `<div class="comment-sub">↳ <b>${esc(r.name)}</b>：${esc(r.message)}</div>`).join('')}
-    </div>`).join('') || '<div class="mini">暂未抓取到评论</div>';
+  ${(c.replies || []).map(r => `<div class="comment-sub">↳ <b>${esc(r.name)}</b>：${esc(r.message)}</div>`).join('')}
+  </div>`).join('') || (commentsPromise && typeof RAW_COMMENTS === 'undefined' ? '<div class="mini">评论数据正在加载…</div>' : '<div class="mini">暂未抓取到评论</div>');
   body.innerHTML = `
     <div class="modal-hero">
-      ${row.pic ? `<img src="${esc(row.pic)}" alt="" referrerpolicy="no-referrer">` : ''}
+    ${row.pic ? `<img src="${esc(row.pic)}" alt="" referrerpolicy="no-referrer" loading="lazy" decoding="async">` : ''}
       <div class="modal-hero-text">
         <h3>${esc(row.title)}</h3>
         <div class="mini">${esc(row.date || '')} · ${esc(row.type || '')} · ${esc(row.account || '')}${row.duration ? ' · ' + timeLabel(row.duration) : ''}</div>
@@ -1847,3 +1850,63 @@ fillFilters();
 const savedTheme = localStorage.getItem('warmaVizTheme') || 'dark';
 applyTheme(savedTheme);
 bindEvents();
+
+// ---------- Load 5 MB comment pack only when it is actually needed ----------
+let commentsPromise = null;
+
+function applyCommentsData() {
+  if (typeof RAW_COMMENTS === 'undefined' || !RAW_COMMENTS) return;
+  for (const row of (RAW.videos || [])) {
+    if (RAW_COMMENTS[row.bvid]) row.comments = RAW_COMMENTS[row.bvid];
+  }
+  if (typeof state !== 'undefined' && state.rows) {
+    for (const row of state.rows) {
+      const src = (RAW.videos || []).find(v => v.bvid === row.bvid);
+      if (src) row.comments = src.comments;
+    }
+  }
+  if (typeof renderAll === 'function') requestAnimationFrame(renderAll);
+
+  const modal = document.getElementById('videoModal');
+  if (modal && !modal.hidden && modal.dataset.bvid) {
+    openVideoModal(modal.dataset.bvid);
+  }
+  console.log('[Warma] Comments loaded: ' + Object.keys(RAW_COMMENTS).length + ' videos');
+}
+
+function ensureCommentsLoaded() {
+  if (commentsPromise) return commentsPromise;
+  commentsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'data-comments.js?v=35';
+    script.async = true;
+    script.onload = () => {
+      applyCommentsData();
+      resolve();
+    };
+    script.onerror = () => {
+      console.warn('[Warma] Comments failed to load');
+      commentsPromise = null;
+      reject(new Error('comments failed to load'));
+    };
+    document.head.appendChild(script);
+  });
+  return commentsPromise;
+}
+
+(function hideInitialLoader() {
+  const loader = document.getElementById('appLoader');
+  if (loader) { loader.style.transition = 'opacity .3s'; loader.style.opacity = '0'; setTimeout(() => loader.remove(), 350); }
+})();
+
+(function preloadCommentsNearInsights() {
+  const target = document.getElementById('insights');
+  if (!target) return;
+  const observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      ensureCommentsLoaded();
+      observer.disconnect();
+    }
+  }, { rootMargin: '450px 0px' });
+  observer.observe(target);
+})();

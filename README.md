@@ -34,6 +34,10 @@
 
 ![预览](site/preview.png)
 
+### ⚡ 性能
+
+站点把评论数据从首屏 `data.js` 中拆出，并在用户接近评论区或打开视频详情时按需加载。首次渲染只需加载核心视频数据与图表库，避免一次性下载数 MB 的评论文本。
+
 ## 🛠 项目结构
 
 ```
@@ -41,12 +45,15 @@ warma-encyclopedia/
 ├── site/                       # 🌐 可视化网站
 │   ├── index.html              #    主页面
 │   ├── app.js                  #    ECharts 图表逻辑
-│   ├── data.js                 #    全量视频数据 (359)
+│   ├── data.js                 #    首屏视频数据 (359)
+│   ├── data-comments.js        #    评论数据（接近评论区时按需加载）
 │   ├── style.css               #    样式
 │   └── vendor/                 #    第三方库
 ├── tools/                      # ⚙️ 自动化工具
 │   ├── update.py               #    全自动更新入口
 │   ├── build_site_data.py      #    生成 data.js
+│   ├── split_site_data.js      #    拆分首屏/评论数据
+│   ├── compact_site_comments.js#    压缩评论数据字段
 │   ├── enrich_xlsx_insights.py #    Excel 增强
 │   ├── fetch_danmaku.py        #    弹幕抓取
 │   ├── bili_api.py             #    B站 API 封装
