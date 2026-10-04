@@ -1878,7 +1878,7 @@ function ensureCommentsLoaded() {
   if (commentsPromise) return commentsPromise;
   commentsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'data-comments.js?v=37';
+    script.src = 'data-comments.js?v=38';
     script.async = true;
     script.onload = () => {
       applyCommentsData();
