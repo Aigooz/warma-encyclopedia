@@ -233,6 +233,7 @@
               <div class="quiz-stat"><b id="quizTotalQ">—</b><span>道题</span></div>
               <div class="quiz-stat"><b>10</b><span>个分类</span></div>
               <div class="quiz-stat"><b>3</b><span>档难度</span></div>
+              <div class="quiz-stat"><b>2</b><span>种题型</span></div>
             </div>
             <div class="quiz-diff-select">
               <button class="quiz-diff-btn active" data-diff="all">全部难度</button>
@@ -262,6 +263,8 @@
             <span id="quizQNum">1 / 10</span>
             <span class="quiz-badge" id="quizCategory">—</span>
             <span class="quiz-badge diff" id="quizDiff">—</span>
+            <span class="quiz-badge format" id="quizFormat">—</span>
+            <span class="quiz-badge points" id="quizPoints">—</span>
             <span id="quizScore" style="margin-left:auto">得分: <b>0</b></span>
           </div>
           <div class="quiz-question" id="quizQuestion">加载中…</div>
@@ -280,8 +283,9 @@
             <h3 id="quizResultTitle">答题完成！</h3>
             <div class="quiz-result-score">
               <span class="big" id="quizResultScore">0</span>
-              <span class="of">/ <span id="quizResultTotal">0</span></span>
+              <span class="of">/ <span id="quizResultMax">0</span></span>
             </div>
+            <div class="quiz-result-count">共 <span id="quizResultTotal">0</span> 题</div>
             <div class="quiz-result-grade" id="quizResultGrade">—</div>
             <div class="quiz-result-bar"><div class="quiz-result-fill" id="quizResultFill"></div></div>
             <p class="quiz-result-msg" id="quizResultMsg"></p>
@@ -329,10 +333,10 @@
       <div style="color:var(--text-muted,#8892b0);font-size:13px;">正在加载百科数据…</div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
     </div>
-<script defer src="vendor/echarts.min.js?v=41"></script>
-<script defer src="data.js?v=41"></script>
-<script defer src="data-quiz.js?v=41"></script>
-<script defer src="app.js?v=41"></script>
+<script defer src="vendor/echarts.min.js?v=42"></script>
+<script defer src="data.js?v=42"></script>
+<script defer src="data-quiz.js?v=42"></script>
+<script defer src="app.js?v=42"></script>
 </body>
 </html>
 

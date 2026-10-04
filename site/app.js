@@ -1878,7 +1878,7 @@ function ensureCommentsLoaded() {
   if (commentsPromise) return commentsPromise;
   commentsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-  script.src = 'data-comments.js?v=41';
+  script.src = 'data-comments.js?v=42';
     script.async = true;
     script.onload = () => {
       applyCommentsData();
@@ -1972,6 +1972,8 @@ function ensureCommentsLoaded() {
   });
 
   const diffLabel = { easy: '简单', medium: '中等', hard: '困难' };
+  const formatLabel = { mc: '选择题', tf: '判断题' };
+  const diffPoints = { easy: 1, medium: 2, hard: 3 };
 
   function showQuestion() {
     if (current >= pool.length) return showResult();
@@ -1980,6 +1982,8 @@ function ensureCommentsLoaded() {
     document.getElementById('quizQNum').textContent = `${current+1} / ${pool.length}`;
     document.getElementById('quizCategory').textContent = q.category;
     document.getElementById('quizDiff').textContent = diffLabel[q.difficulty] || q.difficulty;
+    document.getElementById('quizFormat').textContent = formatLabel[q.format] || '选择题';
+    document.getElementById('quizPoints').textContent = `${diffPoints[q.difficulty] || 1} 分`;
     document.getElementById('quizScore').innerHTML = `得分: <b>${score}</b>`;
     document.getElementById('quizQuestion').textContent = q.q;
     document.getElementById('quizExplain').style.display = 'none';
@@ -2006,7 +2010,7 @@ function ensureCommentsLoaded() {
     answered = true;
     const q = pool[current];
     const isCorrect = idx === q.answer;
-    if (isCorrect) score++;
+    if (isCorrect) score += q.points || diffPoints[q.difficulty] || 1;
 
     // Highlight
     const opts = document.querySelectorAll('.quiz-option');
@@ -2034,8 +2038,10 @@ function ensureCommentsLoaded() {
   function showResult() {
     gameScreen.style.display = 'none';
     resultScreen.style.display = 'block';
-    const pct = Math.round((score / pool.length) * 100);
+    const maxScore = pool.reduce((sum, q) => sum + (q.points || diffPoints[q.difficulty] || 1), 0);
+    const pct = Math.round((score / Math.max(1, maxScore)) * 100);
     document.getElementById('quizResultScore').textContent = score;
+    document.getElementById('quizResultMax').textContent = maxScore;
     document.getElementById('quizResultTotal').textContent = pool.length;
     document.getElementById('quizResultFill').style.width = pct + '%';
 

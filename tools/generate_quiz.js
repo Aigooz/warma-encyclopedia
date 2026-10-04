@@ -28,13 +28,18 @@ const fmtDur = s => { const m=Math.floor(s/60), sec=s%60; return m>0?`${m}分${s
 // ─── Question Bank ───
 const questions = [];
 let qid = 0;
-const add = (category, difficulty, q, options, answerIdx, explanation) => {
+const add = (category, difficulty, q, options, answerIdx, explanation, format = 'mc') => {
   // Normalize: always put correct answer at index 0, then shuffle and track
   const correct = options[answerIdx];
   const others = options.filter((_, i) => i !== answerIdx);
   const shuffled = shuffle([correct, ...others]);
   const finalAnswerIdx = shuffled.indexOf(correct);
-  questions.push({ id: ++qid, category, difficulty, q, options: shuffled, answer: finalAnswerIdx, explanation });
+  const points = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+  questions.push({ id: ++qid, category, difficulty, format, points, q, options: shuffled, answer: finalAnswerIdx, explanation });
+};
+
+const addTrueFalse = (category, difficulty, statement, isTrue, explanation) => {
+  add(category, difficulty, statement, ['正确', '错误'], isTrue ? 0 : 1, explanation, 'tf');
 };
 
 // Category: 数据之最 (Data Records)
@@ -1488,6 +1493,115 @@ archaeologyCommentNos.forEach(no => {
       `《${video.title}》评论区里点赞最高的评论是谁发的？`,
       [correctComment[0], ...authorPool], 0,
       `最高赞评论来自 ${correctComment[0]}，内容是「${snippet}」，获 ${fmtNum(correctComment[1])} 赞。`);
+});
+
+// ─── Shuffle options & randomize answer positions ───
+// ─── 2026-10-05 扩充：题型升级与高质量题库 ───
+const premiumTitle = v => v.title.length > 40 ? v.title.slice(0, 38) + '…' : v.title;
+
+// 高质量选择题：近十年核心数据之最（按年份 × 指标交叉拆分）
+const premiumMetricMap = {
+  view: '播放量',
+  like: '点赞数',
+  danmaku: '弹幕数',
+  coin: '投币数',
+  favorite: '收藏数',
+  share: '分享数',
+};
+for (let year = 2016; year <= 2025; year++) {
+  const pool = videos.filter(v => v.date.startsWith(String(year)));
+  Object.entries(premiumMetricMap).forEach(([metric, label]) => {
+    const sorted = pool.slice().sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
+    if (sorted.length < 4) return;
+    const correct = sorted[0];
+    const wrongs = pick(pool.filter(v => v.bvid !== correct.bvid && (v[metric] || 0) < (correct[metric] || 0)), 3).map(premiumTitle);
+    if (wrongs.length < 3) return;
+    const difficulty = ['view', 'like', 'danmaku'].includes(metric) ? 'medium' : 'hard';
+    add('数据之最', difficulty,
+        `在 ${year} 年发布的全部视频里，${label}最高的是哪一部？`,
+        [premiumTitle(correct), ...wrongs], 0,
+        `《${correct.title}》发布于 ${correct.date}，${label}为 ${fmtNum(correct[metric])}。`);
+  });
+}
+
+// 高质量选择题：标签与弹幕的相邻位次对比
+const premiumTagCounts = {};
+videos.forEach(v => (v.tags || []).forEach(t => {
+  const name = t.name || t;
+  premiumTagCounts[name] = (premiumTagCounts[name] || 0) + 1;
+}));
+[
+  ['warma', '沃玛'], ['沃玛', '搞笑'], ['搞笑', '怒九'], ['怒九', '日常'],
+  ['日常', '手书'], ['手书', '脑洞'], ['脑洞', '独立游戏'], ['独立游戏', '实况'],
+  ['实况', 'WARMA'], ['WARMA', '生活'],
+].forEach(([a, b]) => {
+  const ac = premiumTagCounts[a] || 0;
+  const bc = premiumTagCounts[b] || 0;
+  if (!ac || !bc || ac === bc) return;
+  add('标签与分类', ac > bc ? 'medium' : 'hard',
+      `在当前标签统计里，“${a}”和“${b}”哪一个是更常用的 B 站标签？`,
+      [a, b, '两者一样', '无法比较'], ac > bc ? 0 : 1,
+      `“${a}”出现 ${ac} 次，“${b}”出现 ${bc} 次。`);
+});
+
+[
+  ['awsl', '[ohh]'], ['[ohh]', '有生之年'], ['有生之年', '泪目'], ['泪目', '辛苦了'],
+  ['辛苦了', '沃玛'], ['沃玛', '害怕'], ['害怕', '拜拜'], ['拜拜', '俺也一样'],
+  ['俺也一样', '新年快乐！'], ['新年快乐！', '好！'],
+].forEach(([a, b]) => {
+  const ac = (RAW.top_memes || []).find(m => m.content === a)?.count || 0;
+  const bc = (RAW.top_memes || []).find(m => m.content === b)?.count || 0;
+  if (!ac || !bc || ac === bc) return;
+  add('梗与弹幕', ac > bc ? 'medium' : 'hard',
+      `在当前弹幕总榜里，“${a}”和“${b}”哪一个是出现次数更多的弹幕？`,
+      [a, b, '两者一样', '无法比较'], ac > bc ? 0 : 1,
+      `“${a}”出现 ${ac} 次，“${b}”出现 ${bc} 次。`);
+});
+
+// 判断题：总览、发布规律、标签与弹幕的硬数据校验
+[
+  ['当前收录的两个账号共有 359 个视频。', true, '当前共收录主号 264 个、小号 95 个，合计 359 个视频。', 'medium'],
+  ['当前收录的视频总播放量已经超过 7 亿。', true, '合计播放量为 708,304,191。', 'easy'],
+  ['当前收录的视频总点赞数已经超过 4000 万。', true, '合计点赞数为 42,521,929。', 'easy'],
+  ['当前收录的视频总弹幕数已经超过 350 万条。', true, '合计弹幕数为 3,687,721 条。', 'medium'],
+  ['当前收录的视频总投币数已经超过 1800 万。', true, '合计投币数为 18,267,591 枚。', 'medium'],
+  ['当前收录的视频总收藏数已经超过 1400 万。', true, '合计收藏数为 14,629,350 次。', 'medium'],
+  ['当前收录的视频总分享数已经超过 170 万。', true, '合计分享数为 1,791,539 次。', 'medium'],
+  ['当前收录的视频总评论/回复数已经超过 90 万条。', true, '合计评论/回复数为 951,565 条。', 'medium'],
+  ['当前收录的视频总时长已经超过 200 小时。', true, '总时长为 764,636 秒，约 212.4 小时。', 'medium'],
+  ['主号视频数量是小号的 2.5 倍以上。', true, '主号 264 个，小号 95 个，约 2.8 倍。', 'hard'],
+  ['2024 年发布的视频数量多于 2018 年。', false, '2024 年 30 个，2018 年 32 个，2024 年更少。', 'medium'],
+  ['2022 年发布的视频数量少于 2023 年。', false, '2022 年 24 个，2023 年 19 个，2022 年更多。', 'medium'],
+  ['2026 年发布的视频数量多于 2025 年。', false, '当前收录中 2026 年 21 个，2025 年 25 个。', 'medium'],
+  ['小号视频数量已经超过主号的一半。', false, '小号 95 个不到主号 264 个的一半。', 'hard'],
+  ['10 月是当前数据里发布视频最多的自然月。', true, '10 月 33 个，是当前最高频的自然月。', 'medium'],
+  ['周五是当前数据里发布视频最多的星期。', true, '周五 136 个，是当前最高频的星期。', 'easy'],
+  ['中午 12 点是当前数据里发布视频最多的小时。', true, '12 点有 119 个视频，是最高频发布时段。', 'medium'],
+  ['“warma”标签的出现次数超过“沃玛”标签。', true, 'warma 312 次，沃玛 238 次。', 'easy'],
+  ['“WARMA”标签比“warma”标签更常见。', false, 'WARMA 29 次，warma 312 次，大小写标签分开统计。', 'hard'],
+  ['“搞笑”标签在当前所有标签里排名第 3。', true, '搞笑 79 次，仅次于 warma 和沃玛。', 'medium'],
+  ['“怒九”标签的出现次数多于“日常”标签。', true, '怒九 48 次，日常 39 次。', 'medium'],
+  ['“独立游戏”标签比“实况”标签更常见。', true, '独立游戏 33 次，实况 30 次。', 'medium'],
+  ['“手书”标签比“脑洞”标签更常见。', true, '手书 35 次，脑洞 34 次。', 'hard'],
+  ['“steam”标签比“switch”标签更常见。', true, 'steam 21 次，switch 15 次。', 'hard'],
+  ['“单机联机”标签与“手机游戏”标签出现次数相同。', true, '两者都出现 23 次。', 'hard'],
+  ['当前弹幕总榜第一是“awsl”。', true, 'awsl 共 8,554 次。', 'easy'],
+  ['当前弹幕总榜第二是“[ohh]”。', true, '[ohh] 共 3,670 次。', 'medium'],
+  ['当前弹幕总榜第三是“有生之年”。', true, '有生之年共 3,608 次。', 'medium'],
+  ['当前弹幕总榜第四是“泪目”。', true, '泪目共 3,356 次。', 'medium'],
+  ['当前弹幕总榜第五是“辛苦了”。', true, '辛苦了共 2,319 次。', 'medium'],
+  ['当前弹幕总榜第六是“沃玛”。', true, '沃玛共 2,284 次。', 'hard'],
+  ['当前弹幕总榜第七是“害怕”。', true, '害怕共 2,194 次。', 'hard'],
+  ['当前弹幕总榜第八是“拜拜”。', true, '拜拜共 2,117 次。', 'hard'],
+  ['当前弹幕总榜第九是“俺也一样”。', true, '俺也一样共 1,991 次。', 'hard'],
+  ['当前弹幕总榜第十是“新年快乐！”。', true, '新年快乐！共 1,851 次。', 'hard'],
+  ['Warma 主号粉丝数已经超过 500 万。', true, '主号当前约 5,146,929 粉。', 'medium'],
+  ['小号粉丝数已经超过 150 万。', true, '小号当前约 1,508,866 粉。', 'medium'],
+  ['Warma 主号粉丝数大约是小号的 3 倍多。', true, '约 515 万 ÷ 约 151 万 ≈ 3.4 倍。', 'hard'],
+  ['Warma 的主号等级和小号等级都是 6 级。', true, '两个账号当前都是 B 站 6 级。', 'hard'],
+  ['Warma 的主号和小号简介里都写了同一个合作邮箱。', true, '两个账号都写了 chickenfish@vip.qq.com。', 'hard'],
+].forEach(([statement, isTrue, explanation, difficulty]) => {
+  addTrueFalse('冷知识', difficulty, statement, isTrue, explanation);
 });
 
 // ─── Shuffle options & randomize answer positions ───
