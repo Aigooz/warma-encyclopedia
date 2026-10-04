@@ -1,31 +1,44 @@
 @echo off
 chcp 65001 >nul
-title Warma è¡¨æ ¼ä¸€é”®æ›´æ–°
+title Warma ±í¸ñÒ»¼ü¸üÐÂ
 cd /d "%~dp0"
 
 echo ============================================
-echo   Warma è¡¨æ ¼ä¸€é”®æ›´æ–°
+echo   Warma ±í¸ñÒ»¼ü¸üÐÂ
 echo ============================================
 echo.
 
 set "PY=C:\Users\Aigooz\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
 if not exist "%PY%" (
-    echo [é”™è¯¯] æœªæ‰¾åˆ° Python è¿è¡Œæ—¶ï¼Œè¯·æ‰‹åŠ¨æ£€æŸ¥è·¯å¾„ã€‚
+    echo [´íÎó] Î´ÕÒµ½ Python ÔËÐÐÊ±£¬ÇëÊÖ¶¯¼ì²éÂ·¾¶¡£
     pause
     exit /b 1
 )
 
-echo æ­£åœ¨åŒæ­¥ registry.json ä¸Ž B ç«™å…ƒæ•°æ®...
+echo ÕýÔÚÍ¬²½ registry.json Óë B Õ¾ÔªÊý¾Ý...
 "%PY%" tools\update_warma_xlsx.py
 if errorlevel 1 (
     echo.
-    echo [å¤±è´¥] æ›´æ–°è¿‡ç¨‹ä¸­å‡ºçŽ°é”™è¯¯ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹æ—¥å¿—ã€‚
+    echo [Ê§°Ü] ¸üÐÂ¹ý³ÌÖÐ³öÏÖ´íÎó£¬Çë²é¿´ÉÏ·½ÈÕÖ¾¡£
     pause
     exit /b 1
 )
 
 echo.
-echo [å®Œæˆ] ä¸¤ä¸ªè¡¨æ ¼å·²æ›´æ–°åˆ°æœ€æ–°æ•°æ®ã€‚
-echo       å¤‡ä»½ä¿å­˜åœ¨ F:\warmaç™¾ç§‘\backup_xlsx\
+echo [Íê³É] Á½¸ö±í¸ñÒÑ¸üÐÂµ½×îÐÂÊý¾Ý¡£
+echo       ±¸·Ý±£´æÔÚ F:\warma°Ù¿Æ\backup_xlsx\
+echo.
+echo [GitHub sync] Pushing changes...
+git add -A 2>nul
+git diff --cached --quiet 2>nul || (
+    for /f "tokens=2 delims==" %%%%I in ('wmic os get localdatetime /value 2^^^>nul') do set dt=%%%%I
+    git commit -m "Auto sync tables %%dt:~0,4%%-%%dt:~4,2%%-%%dt:~6,2%%" --quiet 2>nul
+    git push origin master --quiet 2>nul
+    if not errorlevel 1 (
+        echo GitHub synced.
+    ) else (
+        echo GitHub push failed (offline?^).
+    )
+)
 echo.
 pause

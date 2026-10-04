@@ -15,4 +15,17 @@ if "%choice%"=="1" "%PY%" tools\update.py run
 if "%choice%"=="2" "%PY%" tools\update.py ingest
 if "%choice%"=="3" "%PY%" tools\update.py status
 echo.
+echo [GitHub sync] Pushing changes...
+git add -A 2>nul
+git diff --cached --quiet 2>nul || (
+    for /f "tokens=2 delims==" %%%%I in ('wmic os get localdatetime /value 2^^^>nul') do set dt=%%%%I
+    git commit -m "Auto sync %%dt:~0,4%%-%%dt:~4,2%%-%%dt:~6,2%%" --quiet 2>nul
+    git push origin master --quiet 2>nul
+    if not errorlevel 1 (
+        echo GitHub synced.
+    ) else (
+        echo GitHub push failed (offline?^).
+    )
+)
+echo.
 pause
