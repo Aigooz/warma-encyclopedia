@@ -11,6 +11,9 @@ const ROOT = path.resolve(__dirname, '..');
 const dataCode = fs.readFileSync(path.join(ROOT, 'site/data.js'), 'utf8');
 const RAW = new Function(dataCode + '; return RAW;')();
 const videos = RAW.videos;
+const commentsCode = fs.readFileSync(path.join(ROOT, 'site/data-comments.js'), 'utf8');
+const commentsModule = new Function(commentsCode + '; return { RAW_PACKED_COMMENTS };')();
+const RAW_PACKED_COMMENTS = commentsModule.RAW_PACKED_COMMENTS;
 
 // Helpers
 const fmtNum = n => {
@@ -1256,12 +1259,245 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
       `这是一首翻唱作品。`);
 }
 
+// ─── Early-era premium questions (2015–2021) ───
+const earlyRanges = [
+  ['2015-2016', v => v.date < '2017'],
+  ['2017-2019', v => v.date >= '2017' && v.date < '2020'],
+  ['2020-2021', v => v.date >= '2020' && v.date < '2022'],
+];
+const earlyMetrics = [
+  ['view', '播放量'],
+  ['like', '点赞数'],
+  ['danmaku', '弹幕数'],
+  ['coin', '投币数'],
+  ['favorite', '收藏数'],
+  ['share', '分享数'],
+  ['reply', '评论/回复数'],
+  ['duration', '时长'],
+];
+
+earlyRanges.forEach(([rangeName, filter]) => {
+  const pool = videos.filter(filter);
+  earlyMetrics.forEach(([key, label]) => {
+    const sorted = pool.slice().sort((a, b) => b[key] - a[key]);
+    const correct = sorted[0];
+    const wrongs = sorted.slice(1, 4).map(v => v.title.length > 40 ? v.title.slice(0, 38) + '…' : v.title);
+    const ct = correct.title.length > 40 ? correct.title.slice(0, 38) + '…' : correct.title;
+    const explanation = label === '时长'
+      ? `${rangeName} 里时长最长的是《${ct}》，约 ${fmtDur(correct.duration)}。`
+      : `${rangeName} 里${label}最高的是《${ct}》，数值为 ${fmtNum(correct[key])}。`;
+    add('数据之最', 'medium', `在 ${rangeName} 的早期视频里，${label}最高的是哪一个？`,
+        [ct, ...wrongs], 0, explanation);
+  });
+});
+
+const earlyYearCounts = videos.reduce((acc, v) => {
+  const year = v.date.slice(0, 4);
+  acc[year] = (acc[year] || 0) + 1;
+  return acc;
+}, {});
+['2015', '2016', '2017', '2018', '2019', '2020', '2021'].forEach(year => {
+  const correctCount = earlyYearCounts[year] || 0;
+  const options = [
+    String(correctCount),
+    String(correctCount + 1),
+    String(Math.max(1, correctCount - 1)),
+    String(correctCount + 2)
+  ];
+  add('发布规律', 'medium', `Warma 在 ${year} 年发布了多少个视频？`,
+      options, 0,
+      `按当前抓取记录，${year} 年共有 ${correctCount} 个视频。`);
+});
+
+// Early comments: use curated video IDs to avoid repeating the existing generic comment questions.
+const earlyCommentNos = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  26, 28, 32, 35, 37, 40, 47, 48, 57, 79,
+  181, 185, 189, 199, 200, 201, 204, 207, 209, 210,
+];
+earlyCommentNos.forEach(no => {
+  const video = videos.find(v => v.no === no);
+  if (!video) return;
+  const comments = RAW_PACKED_COMMENTS[video.bvid] || [];
+  if (!comments.length) return;
+  const sorted = comments.slice().sort((a, b) => b[1] - a[1]);
+  const correctComment = sorted[0];
+  const correctAuthor = correctComment[0];
+  const seenAuthors = new Set([correctAuthor]);
+  const wrongs = [];
+  for (const c of sorted.slice(1)) {
+    if (!seenAuthors.has(c[0])) {
+      seenAuthors.add(c[0]);
+      wrongs.push(c[0]);
+    }
+    if (wrongs.length >= 3) break;
+  }
+  if (wrongs.length < 3) return;
+  const snippet = (correctComment[3] || '').replace(/\s+/g, ' ').slice(0, 60);
+  add('评论区', 'hard',
+      `《${video.title}》评论区里点赞最高的评论是谁发的？`,
+      [correctAuthor, ...wrongs], 0,
+      `最高赞评论来自 ${correctAuthor}，内容是「${snippet}」，获 ${fmtNum(correctComment[1])} 赞。`);
+});
+
+// ─── 2026-10-05 扩充：考古经典精品题（2015–2021） ───
+const archaeologyPool = videos.filter(v => v.date >= '2015' && v.date < '2022');
+const archaeologyTitle = v => v.title.length > 42 ? v.title.slice(0, 40) + '…' : v.title;
+const archaeologyWrongs = (correct, pool, n = 3) => {
+  const seen = new Set([correct.bvid, correct.title]);
+  const out = [];
+  for (const v of shuffle(pool)) {
+    const title = archaeologyTitle(v);
+    if (!seen.has(v.bvid) && !seen.has(title)) {
+      seen.add(v.bvid);
+      seen.add(title);
+      out.push(title);
+    }
+    if (out.length >= n) break;
+  }
+  return out;
+};
+
+// 考古经典 · 每种早期内容的数据之最
+const archaeologyTypes = Object.entries(archaeologyPool.reduce((acc, v) => {
+  if (v.type) acc[v.type] = (acc[v.type] || 0) + 1;
+  return acc;
+}, {})).filter(([type, count]) => count >= 4)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 7)
+  .map(([type]) => type);
+
+archaeologyTypes.forEach(type => {
+  ['view', 'like', 'danmaku'].forEach(metric => {
+    const metricName = metric === 'view' ? '播放量' : metric === 'like' ? '点赞数' : '弹幕数';
+    const pool = archaeologyPool.filter(v => v.type === type);
+    const sorted = pool.slice().sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
+    const correct = sorted[0];
+    const wrongs = archaeologyWrongs(correct, pool.slice(1));
+    if (wrongs.length < 3) return;
+    add('考古经典', 'medium',
+        `在 2015–2021 的考古视频里，${type}内容中${metricName}最高的是哪一部？`,
+        [archaeologyTitle(correct), ...wrongs], 0,
+        `《${archaeologyTitle(correct)}》发布于 ${correct.date}，${metricName}为 ${fmtNum(correct[metric])}。`);
+  });
+});
+
+// 考古经典 · 各类型最早出现
+archaeologyTypes.forEach(type => {
+  const pool = archaeologyPool.filter(v => v.type === type).sort((a, b) => a.date.localeCompare(b.date));
+  const correct = pool[0];
+  const wrongs = archaeologyWrongs(correct, pool.slice(1));
+  if (wrongs.length < 3) return;
+  add('考古经典', 'medium',
+      `在 2015–2021 的收录记录中，Warma 最早的${type}内容是哪一部？`,
+      [archaeologyTitle(correct), ...wrongs], 0,
+      `《${archaeologyTitle(correct)}》发布于 ${correct.date}，是当前记录里最早的${type}视频。`);
+});
+
+// 考古经典 · 关键作品/系列的最早登场
+const archaeologyKeywords = [
+  ['阿松', /阿松|おそ松さん/],
+  ['扫雷', /扫雷/],
+  ['CUBE MUSIC', /CUBE MUSIC|黑白音乐方块/i],
+  ['几何冲刺', /几何冲刺|GEOMETRY DASH/i],
+  ['QWOP', /QWOP/i],
+  ['奥日与黑暗森林', /奥日与黑暗森林|奥里与黑暗森林|Ori and the Blind Forest/i],
+  ['Splatoon', /Splatoon|喷射战士|乌贼/i],
+  ['塞尔达传说', /塞尔达|旷野之息/i],
+  ['Celeste', /Celeste|蔚蓝/i],
+  ['雨中世界', /雨中世界|RIMWORLD/i],
+  ['动物之森', /动物之森|动物森友会/i],
+  ['我家里有蜘蛛', /我家里有蜘蛛|蜘蛛/],
+  ['只需要 3 秒', /只需要3秒|I Really Like You/i],
+  ['沃玛的生活', /沃玛的生活/],
+  ['中国式家长', /中国式家长/],
+];
+
+archaeologyKeywords.forEach(([label, re]) => {
+  const pool = archaeologyPool.filter(v => re.test(v.title) || (v.tags || []).some(t => re.test(t.name)) || re.test(v.desc || ''))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (pool.length < 3) return;
+  const correct = pool[0];
+  const wrongs = archaeologyWrongs(correct, pool.slice(1));
+  if (wrongs.length < 3) return;
+  add('考古经典', 'hard',
+      `在 2015–2021 的收录记录中，最早出现与「${label}」相关内容的视频是哪一部？`,
+      [archaeologyTitle(correct), ...wrongs], 0,
+      `按当前收录记录，《${archaeologyTitle(correct)}》发布于 ${correct.date}，是最早出现「${label}」相关内容的视频。`);
+});
+
+// 考古经典 · 旧视频弹幕名梗之最
+const archaeologyMemeNames = ['梦开始的地方', '考古', 'awsl', '害怕', '泪目', '暂停成功', '有生之年', '有内味了'];
+archaeologyMemeNames.forEach(meme => {
+  const pool = archaeologyPool.filter(v => (v.memes || []).some(m => m.content === meme && m.count > 0));
+  const sorted = pool.slice().sort((a, b) => {
+    const ac = (a.memes || []).find(m => m.content === meme)?.count || 0;
+    const bc = (b.memes || []).find(m => m.content === meme)?.count || 0;
+    return bc - ac;
+  });
+  if (sorted.length < 4) return;
+  const correct = sorted[0];
+  const wrongs = archaeologyWrongs(correct, sorted.slice(1));
+  if (wrongs.length < 3) return;
+  const memeCount = (correct.memes || []).find(m => m.content === meme)?.count || 0;
+  add('考古经典', 'hard',
+      `在 2015–2021 的旧视频里，弹幕“${meme}”出现最多的是哪一部？`,
+      [archaeologyTitle(correct), ...wrongs], 0,
+      `《${archaeologyTitle(correct)}》的弹幕中，“${meme}”出现了 ${fmtNum(memeCount)} 次。`);
+});
+
+// 考古经典 · 旧视频弹幕峰值
+const archaeologyPeakPool = archaeologyPool.filter(v => (v.peaks || []).length >= 2);
+shuffle(archaeologyPeakPool).slice(0, 12).forEach(video => {
+  const peaks = (video.peaks || []).slice().sort((a, b) => b.count - a.count);
+  const correct = peaks[0];
+  const wrongTimes = peaks.slice(1, 4).map(p => `${p.t} 秒`);
+  if (wrongTimes.length < 3) return;
+  add('考古经典', 'hard',
+      `《${video.title}》里弹幕最密集的片段大约从几秒开始？`,
+      [`${correct.t} 秒`, ...wrongTimes], 0,
+      `按分秒弹幕统计，${correct.t} 秒处是最高峰，峰值约 ${fmtNum(correct.count)} 条。`);
+});
+
+// 考古经典 · 更多老视频最高赞评论作者
+const archaeologyCommentNos = [
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+  21, 22, 23, 24, 25, 29, 30, 33, 34, 36,
+  38, 39, 41, 42, 43, 44, 45, 46, 49, 50,
+  51, 52, 53, 54, 100, 108,
+];
+archaeologyCommentNos.forEach(no => {
+  const video = archaeologyPool.find(v => v.no === no);
+  if (!video) return;
+  const comments = RAW_PACKED_COMMENTS[video.bvid] || [];
+  if (comments.length < 4) return;
+  const sorted = comments.slice().sort((a, b) => b[1] - a[1]);
+  const correctComment = sorted[0];
+  const authorPool = [];
+  const seenAuthors = new Set([correctComment[0]]);
+  for (const c of sorted.slice(1)) {
+    if (!seenAuthors.has(c[0])) {
+      seenAuthors.add(c[0]);
+      authorPool.push(c[0]);
+    }
+    if (authorPool.length >= 3) break;
+  }
+  if (authorPool.length < 3) return;
+  const snippet = (correctComment[3] || '').replace(/\s+/g, ' ').slice(0, 60);
+  add('考古经典', 'hard',
+      `《${video.title}》评论区里点赞最高的评论是谁发的？`,
+      [correctComment[0], ...authorPool], 0,
+      `最高赞评论来自 ${correctComment[0]}，内容是「${snippet}」，获 ${fmtNum(correctComment[1])} 赞。`);
+});
+
 // ─── Shuffle options & randomize answer positions ───
-const finalQuestions = questions.map(q => {
-  // For questions where the correct answer is at index 0 (by construction),
-  // we need to shuffle if they aren't already shuffled
-  // Check if we already shuffled in the add() call
-  return q;
+const finalQuestions = [];
+const seenQuestion = new Set();
+questions.forEach(q => {
+  if (!seenQuestion.has(q.q)) {
+    seenQuestion.add(q.q);
+    finalQuestions.push(q);
+  }
 });
 
 // ─── Output ───
