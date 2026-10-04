@@ -27,7 +27,6 @@ tools/artifact_tmp/
 danmaku/
 
 # Old docx versions (keep only latest)
-warma-encyclopedia-v1*.docx
 warma-encyclopedia-v10.docx
 warma-encyclopedia-v11.docx
 warma-encyclopedia-v12.docx
