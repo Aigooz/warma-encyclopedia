@@ -1878,7 +1878,7 @@ function ensureCommentsLoaded() {
   if (commentsPromise) return commentsPromise;
   commentsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'data-comments.js?v=35';
+    script.src = 'data-comments.js?v=36';
     script.async = true;
     script.onload = () => {
       applyCommentsData();
@@ -1909,4 +1909,157 @@ function ensureCommentsLoaded() {
     }
   }, { rootMargin: '450px 0px' });
   observer.observe(target);
+})();
+
+/* ═══════════ Warma 百科问答 ═══════════ */
+(function initQuiz() {
+  const startScreen = document.getElementById('quizStart');
+  const gameScreen  = document.getElementById('quizGame');
+  const resultScreen = document.getElementById('quizResult');
+  const startBtn    = document.getElementById('quizStartBtn');
+  const nextBtn     = document.getElementById('quizNextBtn');
+  const retryBtn    = document.getElementById('quizRetryBtn');
+  const backBtn     = document.getElementById('quizBackBtn');
+  const totalQEl    = document.getElementById('quizTotalQ');
+  if (!startScreen || typeof QUIZ_DATA === 'undefined') return;
+
+  // State
+  let allQuestions = [...QUIZ_DATA];
+  let pool = [];          // active question pool
+  let current = 0;
+  let score = 0;
+  let answered = false;
+  let selectedDiff = 'all';
+  let selectedCat = 'all';
+  const QUESTIONS_PER_ROUND = 10;
+
+  totalQEl.textContent = allQuestions.length;
+
+  // Difficulty & category filter buttons
+  document.querySelectorAll('.quiz-diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.quiz-diff-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedDiff = btn.dataset.diff;
+    });
+  });
+  document.querySelectorAll('.quiz-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.quiz-cat-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedCat = btn.dataset.cat;
+    });
+  });
+
+  // Start
+  startBtn.addEventListener('click', () => {
+    pool = allQuestions.filter(q =>
+      (selectedDiff === 'all' || q.difficulty === selectedDiff) &&
+      (selectedCat === 'all' || q.category === selectedCat)
+    );
+    // Shuffle & limit
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool = pool.slice(0, Math.min(QUESTIONS_PER_ROUND, pool.length));
+    if (!pool.length) { alert('该筛选下没有题目'); return; }
+    current = 0; score = 0;
+    startScreen.style.display = 'none';
+    resultScreen.style.display = 'none';
+    gameScreen.style.display = 'block';
+    showQuestion();
+  });
+
+  const diffLabel = { easy: '简单', medium: '中等', hard: '困难' };
+
+  function showQuestion() {
+    if (current >= pool.length) return showResult();
+    const q = pool[current];
+    answered = false;
+    document.getElementById('quizQNum').textContent = `${current+1} / ${pool.length}`;
+    document.getElementById('quizCategory').textContent = q.category;
+    document.getElementById('quizDiff').textContent = diffLabel[q.difficulty] || q.difficulty;
+    document.getElementById('quizScore').innerHTML = `得分: <b>${score}</b>`;
+    document.getElementById('quizQuestion').textContent = q.q;
+    document.getElementById('quizExplain').style.display = 'none';
+    document.getElementById('quizActions').style.display = 'none';
+    // Progress bar
+    const pct = ((current) / pool.length) * 100;
+    document.getElementById('quizProgressFill').style.width = pct + '%';
+
+    // Render options
+    const optsEl = document.getElementById('quizOptions');
+    optsEl.innerHTML = '';
+    const letters = ['A','B','C','D','E'];
+    q.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-option';
+      btn.innerHTML = `<span class="opt-letter">${letters[i]}</span><span>${opt}</span>`;
+      btn.addEventListener('click', () => selectAnswer(i, btn));
+      optsEl.appendChild(btn);
+    });
+  }
+
+  function selectAnswer(idx, btnEl) {
+    if (answered) return;
+    answered = true;
+    const q = pool[current];
+    const isCorrect = idx === q.answer;
+    if (isCorrect) score++;
+
+    // Highlight
+    const opts = document.querySelectorAll('.quiz-option');
+    opts.forEach((opt, i) => {
+      opt.disabled = true;
+      if (i === q.answer) opt.classList.add('correct');
+      else if (i === idx) opt.classList.add('wrong');
+    });
+
+    // Show explanation
+    const explainEl = document.getElementById('quizExplain');
+    explainEl.style.display = 'flex';
+    document.getElementById('quizExplainText').textContent = q.explanation;
+    document.getElementById('quizActions').style.display = 'flex';
+    document.getElementById('quizScore').innerHTML = `得分: <b>${score}</b>`;
+
+    nextBtn.textContent = current + 1 >= pool.length ? '查看结果 →' : '下一题 →';
+  }
+
+  nextBtn.addEventListener('click', () => {
+    current++;
+    showQuestion();
+  });
+
+  function showResult() {
+    gameScreen.style.display = 'none';
+    resultScreen.style.display = 'block';
+    const pct = Math.round((score / pool.length) * 100);
+    document.getElementById('quizResultScore').textContent = score;
+    document.getElementById('quizResultTotal').textContent = pool.length;
+    document.getElementById('quizResultFill').style.width = pct + '%';
+
+    let icon, title, msg;
+    if (pct >= 90)      { icon='🏆'; title='百科普级粉丝！'; msg='你对沃玛的了解简直出神入化！这波是百科级别的认知！'; }
+    else if (pct >= 70) { icon='🎉'; title='铁杆粉丝！'; msg='对沃玛的数据了如指掌，看来你经常来百科逛！'; }
+    else if (pct >= 50) { icon='😊'; title='合格粉丝'; msg='你对沃玛有不错的了解，但还有很多宝藏数据等你发现！'; }
+    else if (pct >= 30) { icon='🤔'; title='入门粉丝'; msg='看来你还需要多看看沃玛的视频和百科数据！加油！'; }
+    else                { icon='🌱'; title='新粉报道'; msg='欢迎来到沃玛的世界！从看视频开始，慢慢了解她吧！'; }
+    document.getElementById('quizResultIcon').textContent = icon;
+    document.getElementById('quizResultTitle').textContent = title;
+    document.getElementById('quizResultGrade').textContent = pct >= 90 ? 'S 级 · 百科大师' :
+      pct >= 70 ? 'A 级 · 资深粉丝' : pct >= 50 ? 'B 级 · 熟悉沃玛' :
+      pct >= 30 ? 'C 级 · 初识沃玛' : 'D 级 · 萌新驾到';
+    document.getElementById('quizResultMsg').textContent = msg;
+    setTimeout(() => { document.getElementById('quizResultFill').style.width = pct + '%'; }, 50);
+  }
+
+  retryBtn.addEventListener('click', () => {
+    resultScreen.style.display = 'none';
+    startScreen.style.display = 'block';
+  });
+  backBtn.addEventListener('click', () => {
+    resultScreen.style.display = 'none';
+    startScreen.style.display = 'block';
+  });
 })();

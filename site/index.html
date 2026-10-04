@@ -24,6 +24,7 @@
         <a href="#explore">探索</a>
         <a href="#danmaku">弹幕考古</a>
         <a href="#rank">榜单</a>
+        <a href="#quiz">答题</a>
         <a href="#videos">全部视频</a>
       </nav>
       <button class="theme-btn" id="themeBtn">☀️ 浅色</button>
@@ -220,6 +221,77 @@
       </div>
     </section>
 
+    <section id="quiz">
+      <div class="sec-head"><h2>Warma 百科问答</h2><p>你对沃玛的了解有多少？来挑战一下！</p><div class="sec-line"></div></div>
+      <div class="quiz-wrap panel">
+        <div id="quizStart" class="quiz-screen">
+          <div class="quiz-intro">
+            <div class="quiz-icon">🎯</div>
+            <h3>沃玛知识大挑战</h3>
+            <p>基于百科数据自动生成 · 涵盖数据之最、发布规律、名梗弹幕、字幕深度、评论区与冷知识</p>
+            <div class="quiz-stats-row">
+              <div class="quiz-stat"><b id="quizTotalQ">—</b><span>道题</span></div>
+              <div class="quiz-stat"><b>8</b><span>个分类</span></div>
+              <div class="quiz-stat"><b>3</b><span>档难度</span></div>
+            </div>
+            <div class="quiz-diff-select">
+              <button class="quiz-diff-btn active" data-diff="all">全部难度</button>
+              <button class="quiz-diff-btn" data-diff="easy">简单</button>
+              <button class="quiz-diff-btn" data-diff="medium">中等</button>
+              <button class="quiz-diff-btn" data-diff="hard">困难</button>
+            </div>
+            <div class="quiz-cat-select">
+              <button class="quiz-cat-btn active" data-cat="all">全部分类</button>
+              <button class="quiz-cat-btn" data-cat="数据之最">数据之最</button>
+              <button class="quiz-cat-btn" data-cat="发布规律">发布规律</button>
+              <button class="quiz-cat-btn" data-cat="标签与分类">标签分类</button>
+              <button class="quiz-cat-btn" data-cat="梗与弹幕">梗与弹幕</button>
+              <button class="quiz-cat-btn" data-cat="字幕探索">字幕探索</button>
+              <button class="quiz-cat-btn" data-cat="评论区">评论区</button>
+              <button class="quiz-cat-btn" data-cat="深度对比">深度对比</button>
+              <button class="quiz-cat-btn" data-cat="冷知识">冷知识</button>
+            </div>
+            <button class="btn quiz-start-btn" id="quizStartBtn">开始答题</button>
+          </div>
+        </div>
+        <div id="quizGame" class="quiz-screen" style="display:none">
+          <div class="quiz-progress-bar"><div class="quiz-progress-fill" id="quizProgressFill"></div></div>
+          <div class="quiz-meta">
+            <span id="quizQNum">1 / 10</span>
+            <span class="quiz-badge" id="quizCategory">—</span>
+            <span class="quiz-badge diff" id="quizDiff">—</span>
+            <span id="quizScore" style="margin-left:auto">得分: <b>0</b></span>
+          </div>
+          <div class="quiz-question" id="quizQuestion">加载中…</div>
+          <div class="quiz-options" id="quizOptions"></div>
+          <div class="quiz-explain" id="quizExplain" style="display:none">
+            <div class="quiz-explain-icon">💡</div>
+            <div id="quizExplainText"></div>
+          </div>
+          <div class="quiz-actions" id="quizActions" style="display:none">
+            <button class="btn quiz-next-btn" id="quizNextBtn">下一题 →</button>
+          </div>
+        </div>
+        <div id="quizResult" class="quiz-screen" style="display:none">
+          <div class="quiz-result-inner">
+            <div class="quiz-result-icon" id="quizResultIcon">🎉</div>
+            <h3 id="quizResultTitle">答题完成！</h3>
+            <div class="quiz-result-score">
+              <span class="big" id="quizResultScore">0</span>
+              <span class="of">/ <span id="quizResultTotal">0</span></span>
+            </div>
+            <div class="quiz-result-grade" id="quizResultGrade">—</div>
+            <div class="quiz-result-bar"><div class="quiz-result-fill" id="quizResultFill"></div></div>
+            <p class="quiz-result-msg" id="quizResultMsg"></p>
+            <div class="quiz-result-actions">
+              <button class="btn" id="quizRetryBtn">再来一次</button>
+              <button class="btn ghost" id="quizBackBtn">返回选择</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="videos">
       <div class="sec-head"><h2>全部视频</h2><p>支持表头排序与分页浏览</p><div class="sec-line"></div></div>
       <div class="panel">
@@ -255,9 +327,10 @@
       <div style="color:var(--text-muted,#8892b0);font-size:13px;">正在加载百科数据…</div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
     </div>
-    <script defer src="vendor/echarts.min.js?v=35"></script>
-    <script defer src="data.js?v=35"></script>
-    <script defer src="app.js?v=35"></script>
+    <script defer src="vendor/echarts.min.js?v=36"></script>
+    <script defer src="data.js?v=36"></script>
+    <script defer src="data-quiz.js?v=36"></script>
+    <script defer src="app.js?v=36"></script>
 </body>
 </html>
 

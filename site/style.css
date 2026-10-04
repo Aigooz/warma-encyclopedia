@@ -255,3 +255,83 @@ tr.clickable:hover{background:color-mix(in srgb,var(--pink) 7%,transparent)}
 .cover-cell{width:86px;padding:4px 6px}
 .cover-thumb{width:80px;height:50px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.12);display:block;cursor:zoom-in}
 .cover-empty{width:80px;height:50px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;border:1px dashed var(--line);border-radius:8px}
+
+/* ═══════════ Warma 百科问答 ═══════════ */
+.quiz-wrap{padding:36px;min-height:400px;position:relative;overflow:hidden}
+.quiz-wrap::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,.12),transparent 70%);pointer-events:none}
+.quiz-screen{max-width:680px;margin:0 auto}
+
+/* Start Screen */
+.quiz-intro{text-align:center;padding:20px 0}
+.quiz-icon{font-size:56px;margin-bottom:12px;animation:quizFloat 3s ease-in-out infinite}
+@keyframes quizFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.quiz-intro h3{font-size:26px;font-weight:700;color:var(--text);margin:0 0 8px}
+.quiz-intro p{font-size:14px;color:var(--muted);line-height:1.6;margin:0 0 20px}
+.quiz-stats-row{display:flex;gap:24px;justify-content:center;margin-bottom:20px}
+.quiz-stat{text-align:center}
+.quiz-stat b{display:block;font-size:28px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.quiz-stat span{font-size:12px;color:var(--muted)}
+.quiz-diff-select,.quiz-cat-select{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}
+.quiz-diff-btn,.quiz-cat-btn{padding:7px 16px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;transition:all .2s}
+.quiz-diff-btn:hover,.quiz-cat-btn:hover{border-color:var(--primary);color:var(--primary)}
+.quiz-diff-btn.active,.quiz-cat-btn.active{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.quiz-start-btn{margin-top:8px;padding:12px 40px;font-size:16px;border-radius:12px}
+
+/* Game Screen */
+.quiz-progress-bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:16px}
+.quiz-progress-fill{height:100%;background:var(--grad);border-radius:3px;transition:width .3s ease}
+.quiz-meta{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:13px;color:var(--muted)}
+.quiz-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.quiz-badge:not(.diff){background:rgba(124,92,255,.15);color:var(--primary)}
+.quiz-badge.diff{background:rgba(255,170,0,.15);color:#e8a020}
+.quiz-question{font-size:18px;font-weight:600;color:var(--text);line-height:1.5;margin-bottom:20px;min-height:48px}
+.quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.quiz-option{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:12px;border:1.5px solid var(--line);background:var(--card2,rgba(255,255,255,.03));color:var(--text);font-size:15px;cursor:pointer;text-align:left;transition:all .2s;position:relative;overflow:hidden}
+.quiz-option:hover:not(:disabled){border-color:var(--primary);background:rgba(124,92,255,.08);transform:translateX(4px)}
+.quiz-option:disabled{cursor:default}
+.quiz-option .opt-letter{width:28px;height:28px;border-radius:8px;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;transition:all .2s}
+.quiz-option.correct{border-color:#22c55e;background:rgba(34,197,94,.1)}
+.quiz-option.correct .opt-letter{background:#22c55e;color:#fff}
+.quiz-option.correct::after{content:'✓';position:absolute;right:14px;color:#22c55e;font-weight:700;font-size:18px}
+.quiz-option.wrong{border-color:#ef4444;background:rgba(239,68,68,.1)}
+.quiz-option.wrong .opt-letter{background:#ef4444;color:#fff}
+.quiz-option.wrong::after{content:'✕';position:absolute;right:14px;color:#ef4444;font-weight:700;font-size:18px}
+.quiz-option.reveal{border-color:#22c55e;background:rgba(34,197,94,.06)}
+.quiz-option.reveal .opt-letter{background:#22c55e;color:#fff}
+
+/* Explanation */
+.quiz-explain{display:flex;gap:12px;padding:16px;border-radius:12px;background:rgba(124,92,255,.06);border:1px solid rgba(124,92,255,.15);margin-bottom:16px;animation:quizSlideIn .3s ease}
+@keyframes quizSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.quiz-explain-icon{font-size:20px;flex-shrink:0}
+.quiz-explain div:last-child{font-size:14px;color:var(--text-secondary,var(--text));line-height:1.6}
+
+/* Actions */
+.quiz-actions{display:flex;justify-content:flex-end}
+.quiz-next-btn{padding:10px 28px;border-radius:10px}
+
+/* Result Screen */
+.quiz-result-inner{text-align:center;padding:20px 0;animation:quizSlideIn .4s ease}
+.quiz-result-icon{font-size:64px;margin-bottom:12px}
+.quiz-result-inner h3{font-size:24px;font-weight:700;margin:0 0 16px}
+.quiz-result-score{margin-bottom:8px}
+.quiz-result-score .big{font-size:52px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.quiz-result-score .of{font-size:20px;color:var(--muted)}
+.quiz-result-grade{font-size:18px;font-weight:700;color:var(--primary);margin-bottom:16px}
+.quiz-result-bar{width:280px;height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:0 auto 16px}
+.quiz-result-fill{height:100%;background:var(--grad);border-radius:4px;transition:width .6s ease}
+.quiz-result-msg{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:24px}
+.quiz-result-actions{display:flex;gap:12px;justify-content:center}
+
+/* Responsive */
+@media(max-width:640px){
+  .quiz-wrap{padding:20px}
+  .quiz-intro h3{font-size:20px}
+  .quiz-question{font-size:16px}
+  .quiz-option{padding:12px 14px;font-size:14px}
+  .quiz-stats-row{gap:16px}
+}
+
+/* Dark theme refinements */
+[data-theme="dark"] .quiz-option{background:rgba(255,255,255,.04)}
+[data-theme="dark"] .quiz-option:hover:not(:disabled){background:rgba(124,92,255,.12)}
+[data-theme="dark"] .quiz-explain{background:rgba(124,92,255,.08);border-color:rgba(124,92,255,.2)}
