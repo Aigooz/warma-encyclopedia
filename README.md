@@ -1,39 +1,106 @@
-﻿# Warma 百科
+﻿<div align="center">
 
-B站UP主 [Warma](https://space.bilibili.com/53456)（主号）与 [warma养鸽场](https://space.bilibili.com/106320250)（小号）的数据百科与可视化项目。
+# 🎬 Warma 百科
 
-## 项目结构
+**B站UP主 [Warma](https://space.bilibili.com/53456)（主号）× [warma养鸽场](https://space.bilibili.com/106320250)（小号）**
+
+视频数据 · 可视化 · 弹幕分析 · 自动更新
+
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Videos](https://img.shields.io/badge/videos-359-orange)
+![Python](https://img.shields.io/badge/python-3.10+-yellow?logo=python&logoColor=white)
+![GitHub last commit](https://img.shields.io/github/last-commit/Aigooz/warma-encyclopedia?logo=github)
+
+**[🌐 在线预览](https://aigooz.github.io/warma-encyclopedia/)** · **[📖 使用说明](#-使用)** · **[🛠 项目结构](#-项目结构)**
+
+</div>
+
+---
+
+## 📊 可视化网站
+
+用浏览器打开 `site/index.html` 即可，包含 **20+ 交互式图表**：
+
+| 模块 | 内容 |
+|------|------|
+| 📈 年度趋势 | 投稿频率、时长变化、年度对比 |
+| 🍩 类型分布 | 内容类型占比与演变 |
+| 🔥 弹幕分析 | 峰值时间、热词、互动率 |
+| 🕐 发布时钟 | 各时段投稿习惯 |
+| 🏷 关键词网络 | 标题关键词共现关系 |
+| 🖼 封面画廊 | 按类型/年份浏览封面 |
+| 📐 算法分析 | 间隔预测、趋势拟合 |
+
+![预览](site/preview.png)
+
+## 🛠 项目结构
 
 ```
-├── site/                    # 可视化网站（打开 index.html）
-│   ├── index.html           # 主页面
-│   ├── app.js               # 图表逻辑
-│   ├── data.js              # 全量数据（359个视频）
-│   └── style.css            # 样式
-├── tools/                   # 自动化工具
-│   ├── update.py            # 全自动更新入口
-│   ├── build_site_data.py   # 生成 site/data.js
-│   ├── enrich_xlsx_insights.py  # 表格增强
-│   ├── fetch_danmaku.py     # 弹幕抓取
+warma-encyclopedia/
+├── site/                       # 🌐 可视化网站
+│   ├── index.html              #    主页面
+│   ├── app.js                  #    ECharts 图表逻辑
+│   ├── data.js                 #    全量视频数据 (359)
+│   ├── style.css               #    样式
+│   └── vendor/                 #    第三方库
+├── tools/                      # ⚙️ 自动化工具
+│   ├── update.py               #    全自动更新入口
+│   ├── build_site_data.py      #    生成 data.js
+│   ├── enrich_xlsx_insights.py #    Excel 增强
+│   ├── fetch_danmaku.py        #    弹幕抓取
+│   ├── bili_api.py             #    B站 API 封装
+│   ├── login.py                #    扫码登录
 │   └── ...
-├── charts/                  # 静态图表
-├── subtitles/               # 字幕 JSON
-├── registry.json            # 视频注册表
-├── config.ini               # 配置（Cookie 等，不入库）
-├── 一键更新百科.bat          # 交互式更新
-├── 一键更新表格.bat          # Excel 更新
-├── 同步到GitHub.bat          # 手动同步
+├── charts/                     # 📊 静态图表
+├── subtitles/                  # 📝 字幕 JSON
+├── .github/workflows/          # 🚀 CI/CD
+├── registry.json               # 视频注册表
+├── config.ini                  # 配置（不入库）
+│
+├── 一键更新百科.bat              # 交互式更新
+├── 一键更新表格.bat              # Excel 同步
+├── 同步到GitHub.bat             # 手动推送
 └── 使用说明.md
 ```
 
-## 使用
+## 🚀 使用
 
-1. **一键更新**：双击 `一键更新百科.bat` 选择模式
-2. **更新表格**：双击 `一键更新表格.bat`
-3. **同步 GitHub**：更新脚本会自动推送，或双击 `同步到GitHub.bat`
+### 一键更新
+```bash
+# 交互式菜单（全自动 / 字幕导入 / 查看状态）
+一键更新百科.bat
 
-## 网站预览
+# 同步 Excel 表格
+一键更新表格.bat
+```
 
-用浏览器打开 `site/index.html` 即可，无需服务器。
+### 手动更新
+```bash
+python tools/update.py run      # 全自动更新
+python tools/update.py ingest   # 从 Inbox 导入字幕
+python tools/update.py status   # 查看当前状态
+```
 
-包含：年度趋势、类型分布、时长热力图、弹幕峰值、标题关键词网络、发布时段时钟、封面画廊等 20+ 可视化模块。
+### 配置
+编辑 `config.ini`，填入 B站 Cookie（至少 `SESSDATA` + `buvid3`）：
+```ini
+[bili]
+uid_main = 53456
+uid_alt = 106320250
+cookie = SESSDATA=xxx; buvid3=xxx
+```
+
+> 💡 也可运行 `python tools/login.py` 扫码自动获取。
+
+## 📋 数据表
+
+| 文件 | 说明 |
+|------|------|
+| `@Warma 相关.xlsx` | 主号 264 个视频 |
+| `@warma养鸽场 相关.xlsx` | 小号 95 个视频 |
+| `danmaku/` | 弹幕原始数据（本地生成，不入库） |
+
+## 📄 License
+
+[MIT](LICENSE)

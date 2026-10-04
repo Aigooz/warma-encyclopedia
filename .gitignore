@@ -1,4 +1,4 @@
-# OS
+﻿# OS
 Thumbs.db
 Desktop.ini
 .DS_Store
@@ -17,6 +17,11 @@ node_modules/
 *.tmp
 ~$*.xlsx
 backup_xlsx/
+
+# Dev/debug files
+tools/_*
+tools/artifact_tmp/
+*.bak
 
 # Large raw data (regenerable via tools)
 danmaku/
