@@ -1,0 +1,21 @@
+# 统一文本处理
+* text=auto
+
+# Windows 脚本保持 CRLF
+*.bat eol=crlf
+*.ps1 eol=crlf
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+
+# 让 GitHub 语言统计以可视化网站为主：
+# data pipeline / subtitle / danmaku 属于工程数据，不计入语言占比
+site/** linguist-detectable=true
+tools/** linguist-detectable=false
+subtitles/** linguist-detectable=false
+danmaku/** linguist-detectable=false
+charts/** linguist-detectable=false
