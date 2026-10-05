@@ -1762,6 +1762,26 @@ function bindEvents() {
   });
 
   document.getElementById('themeBtn').addEventListener('click', () => applyTheme(state.theme === 'dark' ? 'light' : 'dark'));
+
+  const desktopNav = document.getElementById('nav');
+  const mobileMenuNav = document.getElementById('mobileMenuNav');
+  if (desktopNav && mobileMenuNav) mobileMenuNav.innerHTML = desktopNav.innerHTML;
+  const mobileMenu = document.getElementById('mobileMenu');
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const mobileMenuClose = document.getElementById('mobileMenuClose');
+  mobileMenuBtn?.addEventListener('click', () => {
+    const open = mobileMenu?.classList.toggle('open');
+    mobileMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  mobileMenuClose?.addEventListener('click', () => {
+    mobileMenu?.classList.remove('open');
+    mobileMenuBtn?.setAttribute('aria-expanded', 'false');
+  });
+  mobileMenu?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+    mobileMenu?.classList.remove('open');
+    mobileMenuBtn?.setAttribute('aria-expanded', 'false');
+  }));
+
   document.getElementById('layoutBtn').addEventListener('click', () => renderGraph(state.rowsFiltered));
   document.getElementById('similarSource').addEventListener('change', event => {
     state.similarBvid = event.target.value;
