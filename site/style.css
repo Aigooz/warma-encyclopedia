@@ -235,6 +235,7 @@ tr.clickable:hover{background:color-mix(in srgb,var(--pink) 7%,transparent)}
 .mini-table { display: grid; grid-template-columns: 64px 48px 1fr 1fr 58px; gap: 8px 8px; align-items: center; font-size: 12px; }
 .mini-table > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-table > div:nth-child(5n+2), .mini-table > div:nth-child(5n+5) { text-align: right; }
+.compact-card { align-self: start; }
 .table-source-line { margin-top: 5px; color: var(--muted); font-size: 11px; }
 
 /* 算法洞察 */
