@@ -1085,16 +1085,6 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
       `《满地都是人头》出现了 685 次。`);
 }
 {
-  add('梗与弹幕', 'hard', `《沃玛的新番更新！从现在开始放飞自我【沃玛的生活/第三期】》里弹幕出现次数最高的名梗是什么？`,
-      [`好听！`, `啾咪`, `好听`, `lei了`], 0,
-      `“好听！”出现了 238 次。`);
-}
-{
-  add('梗与弹幕', 'hard', `《我做过的荒唐事【第十期】》里弹幕出现次数最高的名梗是什么？`,
-      [`你好`, `有生之年`, `抱抱`, `谢谢沃玛`], 0,
-      `“你好”出现了 813 次。`);
-}
-{
   add('梗与弹幕', 'hard', `《迟来的自我介绍【第八期】》里弹幕出现次数最高的名梗是什么？`,
       [`沃玛`, `我妈`, `辛苦了`, `害怕`], 0,
       `“沃玛”出现了 2205 次。`);
@@ -1636,11 +1626,33 @@ advancedCommentPool.slice(0, 60).forEach(({ video, comments }) => {
 });
 
 // 梗与弹幕：更多视频的单片第一弹幕梗
+const genericMemeSet = new Set([
+  '好！', '好听', '好听！', '你好', '好的', '喜欢', '字幕', '拜拜', '拜拜！', '拜拜～',
+  '可以', '加油', '加油！', '到！', '啊？', 'ユ！', '懂了', '十次', '十次！', '百次', '千次',
+]);
+const meaningfulMeme = content => {
+  const text = String(content || '').trim();
+  if (!text || text.length < 2) return false;
+  if (genericMemeSet.has(text)) return false;
+  if (/^[0-9０-９十百千万亿]+[!.！]?$/.test(text)) return false;
+  return true;
+};
+const memeBase = content => String(content || '').replace(/[\s!！？?。．]/g, '').toLowerCase();
 videos.slice().sort((a, b) => b.danmaku - a.danmaku).slice(0, 60).forEach(video => {
   const memes = (video.memes || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0));
-  const correct = memes[0];
-  const wrongs = memes.slice(1, 4).map(m => m.content);
-  if (!correct || wrongs.length < 3 || (correct.count || 0) <= 0) return;
+  const meaningful = memes.filter(m => meaningfulMeme(m.content) && (m.count || 0) >= 20);
+  const correct = meaningful[0];
+  const wrongs = [];
+  const seenBases = new Set([memeBase(correct?.content)]);
+  for (const m of meaningful.slice(1)) {
+    const base = memeBase(m.content);
+    if (!seenBases.has(base)) {
+      seenBases.add(base);
+      wrongs.push(m.content);
+    }
+    if (wrongs.length >= 3) break;
+  }
+  if (!correct || wrongs.length < 3) return;
   addUnique('梗与弹幕', 'hard',
     `《${video.title}》里出现次数最多的弹幕是哪一个？`,
     [correct.content, ...wrongs], 0,
