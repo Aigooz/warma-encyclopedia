@@ -1499,6 +1499,286 @@ archaeologyCommentNos.forEach(no => {
 // ─── 2026-10-05 扩充：题型升级与高质量题库 ───
 const premiumTitle = v => v.title.length > 40 ? v.title.slice(0, 38) + '…' : v.title;
 
+// 2026-10-05 第二轮扩充：更细粒度的年度、类型、标签、评论、弹幕与字幕题
+const seenStems = new Set(questions.map(q => q.q));
+const addUnique = (...args) => {
+  const q = args[2];
+  if (!q || seenStems.has(q)) return;
+  seenStems.add(q);
+  add(...args);
+};
+const addUniqueTrueFalse = (category, difficulty, statement, isTrue, explanation) => {
+  if (!statement || seenStems.has(statement)) return;
+  seenStems.add(statement);
+  addTrueFalse(category, difficulty, statement, isTrue, explanation);
+};
+const approximateMetricOptions = (n) => {
+  const base = Math.max(1, Math.round(n));
+  const options = [
+    `约 ${fmtNum(base)}`,
+    `约 ${fmtNum(Math.round(base * 0.55))}`,
+    `约 ${fmtNum(Math.round(base * 0.75))}`,
+    `约 ${fmtNum(Math.round(base * 1.35))}`,
+  ];
+  return [...new Set(options)];
+};
+
+// 年度总量：按年份 × 指标做近似值题，避免只问一次全局冠军
+const advancedYearStats = {};
+videos.forEach(v => {
+  const year = (v.date || '').slice(0, 4);
+  if (!year) return;
+  advancedYearStats[year] ??= { view: 0, like: 0, danmaku: 0, coin: 0, favorite: 0, share: 0, reply: 0 };
+  ['view', 'like', 'danmaku', 'coin', 'favorite', 'share', 'reply'].forEach(key => {
+    advancedYearStats[year][key] += v[key] || 0;
+  });
+});
+[
+  ['view', '播放量'], ['like', '点赞数'], ['danmaku', '弹幕数'],
+  ['coin', '投币数'], ['favorite', '收藏数'],
+].forEach(([metric, label]) => {
+  for (let year = 2016; year <= 2025; year++) {
+    const stat = advancedYearStats[String(year)];
+    if (!stat) continue;
+    const total = stat[metric] || 0;
+    if (total <= 0) continue;
+    const options = approximateMetricOptions(total);
+    if (options.length < 4) continue;
+    const difficulty = ['view', 'like'].includes(metric) ? 'medium' : 'hard';
+    addUnique('数据之最', difficulty,
+      `在 ${year} 年，主号 + 小号的${label}总量最接近哪个数值？`,
+      options, 0,
+      `主号 + 小号在 ${year} 年合计${label} ${fmtNum(total)}。`);
+  }
+});
+
+// 类型之最：按视频类型 × 指标交叉
+const advancedTypeStats = {};
+videos.forEach(v => {
+  const type = v.type || '未标注';
+  advancedTypeStats[type] ??= { count: 0 };
+  advancedTypeStats[type].count++;
+});
+Object.entries(advancedTypeStats).filter(([, s]) => s.count >= 4).forEach(([type]) => {
+  const pool = videos.filter(v => (v.type || '未标注') === type);
+  [
+    ['view', '播放量'], ['like', '点赞数'], ['danmaku', '弹幕数'],
+    ['coin', '投币数'], ['favorite', '收藏数'],
+  ].forEach(([metric, label]) => {
+    const sorted = pool.slice().sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
+    if (sorted.length < 4 || (sorted[0][metric] || 0) <= 0) return;
+    const correct = sorted[0];
+    const wrongs = pick(pool.filter(v => v.bvid !== correct.bvid && (v[metric] || 0) < (correct[metric] || 0)), 3)
+      .map(premiumTitle);
+    if (wrongs.length < 3) return;
+    const difficulty = ['view', 'like'].includes(metric) ? 'medium' : 'hard';
+    addUnique('数据之最', difficulty,
+      `在「${type}」类视频里，${label}最高的是哪一部？`,
+      [premiumTitle(correct), ...wrongs], 0,
+      `《${correct.title}》发布于 ${correct.date}，${label}为 ${fmtNum(correct[metric])}。`);
+  });
+});
+
+// 标签效率：用平均单视频指标补充表层播放量之外的视角
+const advancedTagStats = {};
+videos.forEach(v => (v.tags || []).forEach(t => {
+  const name = t.name || t;
+  advancedTagStats[name] ??= { count: 0, view: 0, like: 0, danmaku: 0 };
+  advancedTagStats[name].count++;
+  advancedTagStats[name].view += v.view || 0;
+  advancedTagStats[name].like += v.like || 0;
+  advancedTagStats[name].danmaku += v.danmaku || 0;
+}));
+[
+  ['view', '平均单视频播放量'], ['like', '平均单视频点赞数'], ['danmaku', '平均单视频弹幕数'],
+].forEach(([metric, label]) => {
+  const tagPool = Object.entries(advancedTagStats)
+    .filter(([name, s]) => s.count >= 8 && (s[metric] || 0) > 0)
+    .map(([name, s]) => ({ name, ...s, avg: s[metric] / s.count }))
+    .sort((a, b) => b.avg - a.avg);
+  tagPool.slice(0, 12).forEach((correct, i) => {
+    const distractors = tagPool.slice(i + 1, i + 5);
+    if (distractors.length < 3) return;
+    addUnique('标签与分类', i < 3 ? 'medium' : 'hard',
+      `以下哪个标签的${label}最高？`,
+      [correct.name, ...distractors.map(d => d.name)], 0,
+      `“${correct.name}”出现 ${correct.count} 次，${label}为 ${fmtNum(correct.avg)}。`);
+  });
+});
+
+// 评论区：扩展更多视频的最高赞评论作者
+const advancedCommentPool = Object.entries(RAW_PACKED_COMMENTS)
+  .map(([bvid, comments]) => {
+    const video = videos.find(v => v.bvid === bvid);
+    if (!video || !Array.isArray(comments) || comments.length < 4) return null;
+    return { video, comments };
+  })
+  .filter(Boolean)
+  .sort((a, b) => b.video.view - a.video.view);
+advancedCommentPool.slice(0, 60).forEach(({ video, comments }) => {
+  const sorted = comments.slice().sort((a, b) => (b[1] || 0) - (a[1] || 0));
+  const correctComment = sorted[0];
+  const authorPool = [];
+  const seenAuthors = new Set([correctComment[0]]);
+  for (const c of sorted.slice(1)) {
+    if (!seenAuthors.has(c[0])) {
+      seenAuthors.add(c[0]);
+      authorPool.push(c[0]);
+    }
+    if (authorPool.length >= 3) break;
+  }
+  if (authorPool.length < 3 || !(correctComment[1] > 0)) return;
+  const snippet = (correctComment[3] || '').replace(/\s+/g, ' ').slice(0, 60);
+  addUnique('评论区', 'hard',
+    `《${video.title}》评论区里点赞最高的评论是谁发的？`,
+    [correctComment[0], ...authorPool], 0,
+    `最高赞评论来自 ${correctComment[0]}，内容是「${snippet}」，获 ${fmtNum(correctComment[1])} 赞。`);
+});
+
+// 梗与弹幕：更多视频的单片第一弹幕梗
+videos.slice().sort((a, b) => b.danmaku - a.danmaku).slice(0, 60).forEach(video => {
+  const memes = (video.memes || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0));
+  const correct = memes[0];
+  const wrongs = memes.slice(1, 4).map(m => m.content);
+  if (!correct || wrongs.length < 3 || (correct.count || 0) <= 0) return;
+  addUnique('梗与弹幕', 'hard',
+    `《${video.title}》里出现次数最多的弹幕是哪一个？`,
+    [correct.content, ...wrongs], 0,
+    `当前抓取记录中，“${correct.content}”出现了 ${fmtNum(correct.count)} 次。`);
+});
+
+// 弹幕峰值：用全量分秒数据挑出最清晰的高峰
+const advancedPeakCandidates = [];
+videos.forEach(video => {
+  const peaks = (video.peaks || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0));
+  if (!peaks.length) return;
+  advancedPeakCandidates.push({ video, peak: peaks[0] });
+});
+advancedPeakCandidates.sort((a, b) => b.peak.count - a.peak.count).slice(0, 50).forEach(({ video, peak }) => {
+  const otherPeaks = (video.peaks || []).filter(p => p.t !== peak.t && p.count > 0)
+    .sort((a, b) => b.count - a.count).slice(0, 3);
+  if (otherPeaks.length < 3) return;
+  addUnique('考古经典', 'hard',
+    `《${video.title}》里弹幕最密集的片段大约从几秒开始？`,
+    [`${peak.t} 秒`, ...otherPeaks.map(p => `${p.t} 秒`)], 0,
+    `按当前分秒弹幕统计，${peak.t} 秒处是最高峰，峰值约 ${fmtNum(peak.count)} 条。`);
+});
+
+// 荣誉记录：把 B 站排行榜荣誉也变成可考据的题目
+videos.filter(v => (v.honors || []).some(h => /第(\d+)名/.test(h.desc || '')))
+  .map(video => {
+    const ranks = (video.honors || []).map(h => parseInt((h.desc || '').match(/第(\d+)名/)?.[1], 10))
+      .filter(n => Number.isFinite(n));
+    return { video, rank: Math.min(...ranks) };
+  })
+  .sort((a, b) => a.rank - b.rank)
+  .slice(0, 30)
+  .forEach(({ video, rank }, i) => {
+    const deltas = [1, 2, 3].map(d => Math.max(1, rank + d)).filter(n => n !== rank);
+    const options = [`第 ${rank} 名`, ...deltas.slice(0, 3).map(n => `第 ${n} 名`)];
+    if (options.length < 4) return;
+    addUnique('冷知识', i < 5 ? 'medium' : 'hard',
+      `《${video.title}》在 B 站排行榜最高到达过第几名？`,
+      options, 0,
+      `当前收录的荣誉记录显示最高为第 ${rank} 名。`);
+  });
+
+// 字幕探索：行数与字符密度
+videos.filter(v => v.duration > 0 && v.sub_lines > 0)
+  .map(v => ({ ...v, lineDensity: v.sub_lines / (v.duration / 60) }))
+  .sort((a, b) => b.lineDensity - a.lineDensity)
+  .slice(0, 30)
+  .forEach((video, i) => {
+    const otherPool = videos.filter(v => v.bvid !== video.bvid && v.duration > 0 && v.sub_lines > 0)
+      .map(v => ({ ...v, lineDensity: v.sub_lines / (v.duration / 60) }))
+      .filter(v => v.lineDensity < video.lineDensity);
+    const wrongs = otherPool.slice(0, 3);
+    if (wrongs.length < 3) return;
+    addUnique('字幕探索', i < 5 ? 'medium' : 'hard',
+      `以下哪部视频的字幕行数密度（行/分钟）最高？`,
+      [premiumTitle(video), ...wrongs.map(premiumTitle)], 0,
+      `《${video.title}》约 ${video.duration} 秒、${video.sub_lines} 行字幕，密度约 ${video.lineDensity.toFixed(1)} 行/分钟。`);
+  });
+
+// 判断题：年度、账号、类型与标签的硬数据校验
+[
+  ['2019 年的总播放量高于 2020 年。', true, '2019 年约 1.11 亿，2020 年约 1.04 亿。', 'medium'],
+  ['2020 年的总点赞数高于 2019 年。', true, '2020 年约 754.17 万，2019 年约 530.92 万。', 'medium'],
+  ['2022 年的总弹幕数高于 2021 年。', false, '2022 年约 35.05 万，2021 年约 41.17 万。', 'hard'],
+  ['2018 年的总投币数高于 2017 年。', true, '2018 年约 63.56 万，2017 年约 39.46 万。', 'medium'],
+  ['2015 年的视频总时长高于 2016 年。', false, '2015 年约 228 秒，2016 年约 17,697 秒。', 'hard'],
+  ['主号的总播放量高于小号。', true, '主号约 6.04 亿，小号约 1.04 亿。', 'easy'],
+  ['小号的总收藏数高于主号。', true, '小号约 208.83 万，主号约 1,254.11 万。', 'hard'],
+  ['主号的总投币数高于小号。', true, '主号约 1,676.75 万，小号约 150.01 万。', 'medium'],
+  ['小号的总分享数低于主号。', true, '小号约 17.43 万，主号约 161.72 万。', 'medium'],
+  ['游戏实况类视频数量最多。', true, '当前收录中有 150 个游戏实况类视频。', 'easy'],
+  ['翻唱/音乐类视频总播放量高于直播录像类。', true, '翻唱/音乐约 1.86 亿，直播录像约 1,556 万。', 'medium'],
+  ['绘画/手书类视频总点赞数高于爆炸电台类。', true, '绘画/手书约 658.62 万，爆炸电台约 236.86 万。', 'medium'],
+  ['“创意”标签的平均单视频播放量高于“手书”标签。', true, '“创意”约 475.15 万，“手书”约 381.92 万。', 'hard'],
+  ['“原创动画”标签的平均单视频点赞量高于“脑洞”标签。', true, '“原创动画”约 34.77 万，“脑洞”约 31.94 万。', 'hard'],
+  ['“搞笑”标签的平均单视频播放量高于“怒九”标签。', true, '“搞笑”约 336.12 万，“怒九”约 253.21 万。', 'medium'],
+  ['“沃玛”标签的平均单视频点赞量高于“warma”标签。', true, '“沃玛”约 15.41 万，“warma”约 11.52 万。', 'hard'],
+  ['“直播录像”标签的平均单视频播放量低于“实况”标签。', true, '“直播录像”约 33.11 万，“实况”约 252.89 万。', 'medium'],
+  ['2026 年的总弹幕数低于 2025 年。', true, '2026 年约 19.21 万，2025 年约 21.24 万。', 'medium'],
+  ['2026 年的总播放量低于 2024 年。', true, '2026 年约 4,719 万，2024 年约 8,700 万。', 'medium'],
+  ['2020 年的总投币数低于 2019 年。', false, '2020 年约 391.78 万，2019 年约 246.02 万。', 'hard'],
+  ['2021 年的总分享数高于 2022 年。', false, '2021 年约 17.54 万，2022 年约 24.33 万。', 'hard'],
+  ['2024 年的总收藏数高于 2023 年。', true, '2024 年约 195.66 万，2023 年约 154.25 万。', 'hard'],
+  ['2025 年的总评论/回复数低于 2024 年。', true, '2025 年约 6.70 万，2024 年约 8.53 万。', 'hard'],
+  ['2017 年的视频数量少于 2018 年。', false, '2017 年 57 个，2018 年 32 个。', 'medium'],
+  ['2019 年的视频数量多于 2018 年。', true, '2019 年 64 个，2018 年 32 个。', 'easy'],
+].forEach(([statement, isTrue, explanation, difficulty]) => {
+  addUniqueTrueFalse('冷知识', difficulty, statement, isTrue, explanation);
+});
+
+// 年度平均：把总量问题下沉到“平均每个视频”的维度
+[
+  ['view', '播放量'], ['like', '点赞数'], ['danmaku', '弹幕数'],
+].forEach(([metric, label]) => {
+  for (let year = 2016; year <= 2025; year++) {
+    const stat = advancedYearStats[String(year)];
+    if (!stat) continue;
+    const total = stat[metric] || 0;
+    if (total <= 0) continue;
+    const count = videos.filter(v => (v.date || '').startsWith(String(year))).length;
+    const avg = total / Math.max(1, count);
+    const options = approximateMetricOptions(avg);
+    if (options.length < 4) continue;
+    addUnique('数据之最', 'hard',
+      `在 ${year} 年，平均每个视频的${label}最接近哪个数值？`,
+      options, 0,
+      `主号 + 小号在 ${year} 年共 ${count} 个视频，平均每个视频${label} ${fmtNum(avg)}。`);
+  }
+});
+
+// 视频转化率：把播放量、点赞、弹幕、评论的相对效率拆成可考察的硬数据
+const rateText = p => p >= 1 ? `${p.toFixed(2)}%` : `${p.toFixed(3)}%`;
+const approximateRateOptions = p => {
+  const options = [
+    rateText(p),
+    rateText(p * 0.55),
+    rateText(p * 0.75),
+    rateText(p * 1.35),
+  ];
+  return [...new Set(options)];
+};
+[
+  ['like', '点赞/播放'], ['reply', '评论/播放'], ['danmaku', '弹幕/播放'],
+].forEach(([metric, label]) => {
+  videos.filter(v => v.view > 0 && (v[metric] || 0) > 0)
+    .map(v => ({ ...v, rate: (v[metric] || 0) / v.view }))
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 20)
+    .forEach(video => {
+      const options = approximateRateOptions(video.rate * 100);
+      if (options.length < 4) return;
+      addUnique('深度对比', 'hard',
+        `《${video.title}》的${label}转化率大约是多少？`,
+        options, 0,
+        `按当前收录数据，${metric} ${fmtNum(video[metric] || 0)} / 播放 ${fmtNum(video.view)}，约 ${rateText(video.rate * 100)}。`);
+    });
+});
+
 // 高质量选择题：近十年核心数据之最（按年份 × 指标交叉拆分）
 const premiumMetricMap = {
   view: '播放量',
