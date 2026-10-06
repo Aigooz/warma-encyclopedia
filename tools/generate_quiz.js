@@ -1899,11 +1899,113 @@ videos.forEach(v => (v.tags || []).forEach(t => {
 // ─── Shuffle options & randomize answer positions ───
 const finalQuestions = [];
 const seenQuestion = new Set();
-questions.forEach(q => {
-  if (!seenQuestion.has(q.q)) {
-    seenQuestion.add(q.q);
-    finalQuestions.push(q);
+ 
+// ─── Quality gate ───
+// 目标不是堆数量，而是保留可考据、有具体信息、选项同构、模板复制度低的题目。
+// 生成逻辑仍可保留原始候选，但输出必须通过这道质量闸，避免后续重跑时低质题回潮。
+const lowQualityPatterns = [
+  /评论区里点赞最高的评论是谁发的/,
+  /里出现次数最多的弹幕是哪一个/,
+  /排行榜最高到达过第几名/,
+  /转化率大约是多少/,
+  /平均每个视频的/,
+  /以下哪个标签的.*最高/,
+  /哪一个是更常用的 B 站标签/,
+  /哪一个是出现次数更多的弹幕/,
+  /字幕行数密度/,
+  /在 \d{4} 年发布了多少个视频/,
+  /主号 \+ 小号的.+总量最接近/,
+  /所有视频加起来的总时长/,
+  /在 \d{4} 年发布的全部视频里/,
+  /在「.+?」类视频里/,
+  /在 .+? 的早期视频里/,
+  /在 2015–2021 的考古视频里/,
+];
+// 单片“弹幕最高频”题只保留少数真正有记忆点的作品，其余一律视为统计搬运。
+const selectedTopDanmakuPatterns = [
+  /^《我制作了免费的养宠物游戏！》/,
+  /^《我阻止了地球末日！》/,
+  /^《姐妹俩一起玩！【Vlog】》/,
+];
+const contentQuizRule = (text) =>
+  /^(《只需要3秒|《我家里有蜘蛛|《诸神的奥运|《我已经是自娱自乐|《读评论|《姐妹俩一起玩|《迟来的自我介绍|《次时代高级写实儿童画)/.test(text);
+const isQualityQuestion = (q) => {
+  const text = q.q || '';
+  if (lowQualityPatterns.some(re => re.test(text))) return false;
+  if (/弹幕(中)?出现次数最(高|多的梗)/.test(text) && !selectedTopDanmakuPatterns.some(re => re.test(text))) return false;
+
+  switch (q.category) {
+    case '数据之最':
+      // 保留具体作品之最、核心账号对比，剔除“所有视频总 X 大约多少”的数值搬运。
+      return !/^Warma 所有视频的总(投币|分享|收藏)/.test(text) &&
+        !/^Warma 所有视频的评论\/回复总数大约/.test(text) &&
+        !/^Warma 主号和小号谁的字幕行数/.test(text) &&
+        !/^Warma 主号和小号谁的评论\/回复数/.test(text);
+
+    case '发布规律':
+      return /^Warma (最常|哪一年|在 B 站的第一个视频|主号 \+ 小号总共|所有视频|最近发布|最长断更)/.test(text) ||
+        contentQuizRule(text) && /发布于哪一年/.test(text);
+
+    case '标签与分类':
+      return /^Warma (视频中|哪种类型的视频(数量|总播放量)最多)/.test(text) ||
+        /^Warma 视频中标签数量第二名|^排除 warma、沃玛、WARMA 后/.test(text) ||
+        contentQuizRule(text) && /(标签|类型|属于哪一类)/.test(text);
+
+    case '梗与弹幕':
+      return /^Warma 视频中弹幕|弹幕名梗榜第二名|哪一年的弹幕最活跃/.test(text) ||
+        contentQuizRule(text) && /弹幕/.test(text) ||
+        /^《(我制作了免费的养宠物游戏！|我阻止了地球末日！|小时候最害怕的一对情侣|轨道双子星)/.test(text);
+
+    case '字幕探索':
+      return /^(以下哪句话出自|沃玛制作的免费游戏|2026 年字幕行数最多|Warma 的第一个视频|以下哪个视频的字幕最多)/.test(text) ||
+        /^《(我家里有蜘蛛|只需要3秒|轨道双子星|小时候最害怕|出国！去逛全球最大的游戏展吧！|诸神的奥运|读评论|我已经是自娱自乐|姐妹俩一起玩|沃玛的新番|下雨天给地上的鱼打伞不可以吗？！)/.test(text);
+
+    case '评论区':
+      // 只保留可考据的全站型结论；去掉年度计数、数量估算和重复问作者的题。
+      return /^(Warma 视频下获赞最高|抓取到的评论中，(点赞最高的评论内容|发言最多的非 Warma 本人是哪个用户|非 Warma 本人的总获赞最高用户))/.test(text);
+
+    case '深度对比':
+      // 保留主/小号的核心规模差异；批量拆成弹幕、分享、点赞、视频数倍数的题没有记忆价值。
+      return /^(Warma 主号总播放量|Warma 主号的粉丝数|点赞率最高|Warma 主号和小号谁的平均单集时长)/.test(text);
+
+    case '冷知识':
+      if (q.format === 'tf') {
+        return [
+          /^游戏实况类视频数量最多/,
+          /^翻唱\/音乐类视频总播放量高于直播录像类/,
+          /^“warma”标签的出现次数超过“沃玛”标签/,
+          /^当前弹幕总榜第一是“awsl”/,
+          /^Warma 主号粉丝数已经超过 500 万/,
+          /^Warma 的主号等级和小号等级都是 6 级/,
+          /^Warma 的主号和小号简介里都写了同一个合作邮箱/,
+        ].some(re => re.test(text));
+      }
+      return /^Warma (主号|小号|视频中最常合作|主号和小号加起来粉丝|的微博账号|的第一次出国|和怒九合作的第一首合唱|早期的自制游戏《良》|早期自制游戏《良》|的《我的小鲨鱼》游戏开发周期|和 CB 合作的第一首原创曲|主号的 B 站等级)/.test(text) ||
+        /^在《我家里有蜘蛛！！！》和《只需要3秒的歌》中，CB 是谁/.test(text) ||
+        /^《(我喜欢爱酱！！（绊爱面试）|我为小朋友们制作了几个高兴的东西|怎么办！我现在好怕被2233娘封号)/.test(text);
+
+    case '视频内容':
+      // 剔除近作游戏类型模板、跨栏目重复的工作分工/游戏展题，以及单纯靠数据反推的评论量题。
+      return !/^(《REANIMAL|《Subnautica2：异星水域》|《双影奇境》|《星露谷！田园开荒生活！》)/.test(text) &&
+        !/^《轨道双子星》里，谁负责/.test(text) &&
+        !/^《出国！去逛全球最大的游戏展吧！》说的是哪一个游戏展/.test(text) &&
+        !/^《我在国外到处胡说八道【爆米花电台04】》的电台类型/.test(text) &&
+        !/^Warma 的哪期视频获得了超过 16,000 条评论/.test(text);
+
+    case '考古经典':
+      return /最早的(游戏实况|翻唱\/音乐|直播录像|绘画\/手书|爆炸电台|生活日常|配音\/小剧场)内容/.test(text) ||
+        /最早出现与「(奥日与黑暗森林|动物之森|沃玛的生活)」相关内容/.test(text) ||
+        /旧视频里，弹幕“(梦开始的地方|考古|awsl)”出现最多/.test(text);
+
+    default:
+      return false;
   }
+};
+
+questions.forEach(q => {
+  if (seenQuestion.has(q.q)) return;
+  seenQuestion.add(q.q);
+  if (isQualityQuestion(q)) finalQuestions.push(q);
 });
 
 // ─── Output ───
