@@ -1,6 +1,6 @@
 {
   "docx_version": "v16",
-  "total_sub_lines": 160118,
+  "total_sub_lines": 161596,
   "videos": [
     {
       "no": 1,
@@ -2362,8 +2362,8 @@
       "account": "小号（warma养鸽场）",
       "bvid": "BV1VZ4y1s7QJ",
       "intro_count": 0,
-      "sub_lines": 0,
-      "sub_chars": 0,
+      "sub_lines": 127,
+      "sub_chars": 1012,
       "source": "B站用户视频 + B站元数据"
     },
     {
@@ -4306,8 +4306,8 @@
       "account": "主号（Warma）",
       "bvid": "BV15rHv6mE3T",
       "intro_count": 0,
-      "sub_lines": 0,
-      "sub_chars": 0,
+      "sub_lines": 1351,
+      "sub_chars": 11926,
       "source": "B站用户视频 + B站元数据"
     },
     {
