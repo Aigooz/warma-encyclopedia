@@ -1,6 +1,6 @@
 {
   "docx_version": "v16",
-  "total_sub_lines": 158931,
+  "total_sub_lines": 160118,
   "videos": [
     {
       "no": 1,
@@ -4309,6 +4309,28 @@
       "sub_lines": 0,
       "sub_chars": 0,
       "source": "B站用户视频 + B站元数据"
+    },
+    {
+      "no": 360,
+      "title": "【warma/怒九】吱吱！好玩鼠了！！！",
+      "date": "2026-10-16",
+      "type": "其他",
+      "account": "主号（Warma）",
+      "intro_count": 0,
+      "sub_lines": 921,
+      "sub_chars": 6596,
+      "bvid": "BV1vHJy6vEnB"
+    },
+    {
+      "no": 361,
+      "title": "【warma】我是画笔造桥大师！！！",
+      "date": "2026-11-06",
+      "type": "游戏实况",
+      "account": "小号（warma养鸽场）",
+      "intro_count": 0,
+      "sub_lines": 266,
+      "sub_chars": 2065,
+      "bvid": "BV1ufx86vEqn"
     }
   ]
 }
