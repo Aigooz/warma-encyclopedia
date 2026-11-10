@@ -48,6 +48,8 @@ def main() -> None:
         except Exception:
             insights = {}
     insights_videos = insights.get("videos") or {}
+    coverage_file = ROOT / "site" / "data-coverage.json"
+    coverage = json.loads(coverage_file.read_text(encoding="utf-8")).get("videos", {}) if coverage_file.exists() else {}
     profiles = {}
     if PROFILES_FILE.exists():
         try:
@@ -73,6 +75,8 @@ def main() -> None:
         if not isinstance(info, dict):
             info = {}
         stat = info.get("stat") or {}
+        subtitle_file = ROOT / "site" / "subtitles" / (str(bvid) + ".json")
+        subtitle_lines = json.loads(subtitle_file.read_text(encoding="utf-8")).get("lines", []) if subtitle_file.exists() else []
         pubdate = info.get("pubdate")
         pub_dt = None
         if pubdate:
@@ -97,6 +101,8 @@ def main() -> None:
             "intro_count": row.get("intro_count", 0),
             "sub_lines": row.get("sub_lines"),
             "sub_chars": row.get("sub_chars"),
+            "subtitle_available_lines": len(subtitle_lines),
+            "coverage": coverage.get(bvid),
             "bvid": bvid,
             "aid": info.get("aid"),
             "duration": info.get("duration"),
