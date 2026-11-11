@@ -1437,6 +1437,38 @@ function renderProfiles() {
     </div>`).join('');
 }
 
+/**
+ * 微博动态模块。
+ *
+ * 数据来自 m.weibo.cn 公开接口（tools/build_weibo_data.py 生成），随
+ * data.js 一同发布。免登录接口只返回最近一页，因此这里说明抓取时间，
+ * 避免读者误以为它是全量历史。
+ */
+function renderWeibo() {
+  const el = document.getElementById('weiboList');
+  if (!el) return;
+  const store = RAW.weibo || {};
+  const accounts = Object.entries(store).filter(([, v]) => v && (v.posts || []).length);
+  if (!accounts.length) {
+    el.innerHTML = '<div class="mini">暂无微博动态</div>';
+    return;
+  }
+  const labels = { warma: 'Warma（_warma_）', nujiu: '怒九（怒九今天爆肝了吗）' };
+  el.innerHTML = accounts.map(([key, account]) => {
+    const posts = [...account.posts].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const items = posts.map(p => `
+      <a class="weibo-item" href="${esc(p.url || '#')}" target="_blank" rel="noreferrer">
+        <div class="weibo-head"><span class="pill">${esc((p.date || '').slice(0, 10))}</span>${p.region ? `<span class="mini">${esc(p.region)}</span>` : ''}</div>
+        <div class="weibo-text">${esc((p.text || '').slice(0, 220))}</div>
+        <div class="mini">赞 ${formatChineseNumber(p.likes || 0)} · 评论 ${formatChineseNumber(p.comments || 0)} · 转发 ${formatChineseNumber(p.reposts || 0)}</div>
+      </a>`).join('');
+    return `<div class="weibo-account">
+      <div class="weibo-title">${esc(labels[key] || key)} <span class="mini">${posts.length} 条近期动态</span></div>
+      <div class="weibo-grid">${items}</div>
+    </div>`;
+  }).join('');
+}
+
 function renderMemes() {
   const memes = (RAW.top_memes || []).slice(0, 25);
   if (!memes.length) { renderEmptyChart('chartMemes'); return; }
@@ -1698,6 +1730,7 @@ function renderAll() {
   safe(renderGraph, 'graph');
   safe(renderAlgorithmClusters, 'algorithmClusters');
   safe(renderSimilarFinder, 'similarFinder');
+  safe(renderWeibo, 'weibo');
   safe(renderTagAffinity, 'tagAffinity');
   safe(renderKeywordEvolution, 'keywordEvolution');
   safe(renderTagCloud, 'tagCloud');
@@ -1941,6 +1974,7 @@ function ensureCommentsLoaded() {
   const retryBtn    = document.getElementById('quizRetryBtn');
   const backBtn     = document.getElementById('quizBackBtn');
   const totalQEl    = document.getElementById('quizTotalQ');
+  const poolSummary = document.getElementById('quizPoolSummary');
   if (!startScreen || typeof QUIZ_DATA === 'undefined') return;
 
   // State
@@ -1951,9 +1985,24 @@ function ensureCommentsLoaded() {
   let answered = false;
   let selectedDiff = 'all';
   let selectedCat = 'all';
-  const QUESTIONS_PER_ROUND = 10;
+  let questionsPerRound = 20;
 
   totalQEl.textContent = allQuestions.length;
+  document.getElementById('quizCategoryTotal').textContent = new Set(allQuestions.map(q => q.category)).size;
+
+  const getFilteredQuestions = () => allQuestions.filter(q =>
+    (selectedDiff === 'all' || q.difficulty === selectedDiff) &&
+    (selectedCat === 'all' || q.category === selectedCat)
+  );
+  const updatePoolSummary = () => {
+    const available = getFilteredQuestions().length;
+    const roundSize = Math.min(questionsPerRound, available);
+    poolSummary.textContent = available
+      ? `当前筛选有 ${available} 道题，本局将抽取 ${roundSize} 道。`
+      : '当前筛选暂无题目。';
+    startBtn.disabled = available === 0;
+  };
+  updatePoolSummary();
 
   // Difficulty & category filter buttons
   document.querySelectorAll('.quiz-diff-btn').forEach(btn => {
@@ -1961,6 +2010,7 @@ function ensureCommentsLoaded() {
       document.querySelectorAll('.quiz-diff-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       selectedDiff = btn.dataset.diff;
+      updatePoolSummary();
     });
   });
   document.querySelectorAll('.quiz-cat-btn').forEach(btn => {
@@ -1968,21 +2018,31 @@ function ensureCommentsLoaded() {
       document.querySelectorAll('.quiz-cat-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       selectedCat = btn.dataset.cat;
+      updatePoolSummary();
+    });
+  });
+  document.querySelectorAll('.quiz-length-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.quiz-length-btn').forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-pressed', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+      questionsPerRound = Number(btn.dataset.length);
+      updatePoolSummary();
     });
   });
 
   // Start
   startBtn.addEventListener('click', () => {
-    pool = allQuestions.filter(q =>
-      (selectedDiff === 'all' || q.difficulty === selectedDiff) &&
-      (selectedCat === 'all' || q.category === selectedCat)
-    );
+    pool = getFilteredQuestions();
     // Shuffle & limit
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    pool = pool.slice(0, Math.min(QUESTIONS_PER_ROUND, pool.length));
+    pool = pool.slice(0, questionsPerRound);
     if (!pool.length) { alert('该筛选下没有题目'); return; }
     current = 0; score = 0;
     startScreen.style.display = 'none';

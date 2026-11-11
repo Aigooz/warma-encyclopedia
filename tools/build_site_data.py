@@ -23,10 +23,19 @@ COMMENTS_FILE = ROOT / "tools" / "bili_comments_cache.json"
 INSIGHTS_FILE = ROOT / "tools" / "danmaku_insights.json"
 ACCOUNT_STATS_FILE = ROOT / "tools" / "account_stats.json"
 PROFILES_FILE = ROOT / "tools" / "up_profiles.json"
+WEIBO_FILE = ROOT / "site" / "data-weibo.js"
 OUTPUT = ROOT / "site" / "data.js"
 
 
 def main() -> None:
+    def load_weibo():
+        """读取 tools/build_weibo_data.py 生成的微博块（缺失时返回空）。"""
+        try:
+            text = WEIBO_FILE.read_text(encoding="utf-8")
+            return json.loads(text[text.index("{"):].rstrip().rstrip(";"))
+        except Exception:
+            return {}
+
     registry = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
     cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
     tags_cache = {}
@@ -192,6 +201,7 @@ def main() -> None:
         "comments_fetched": len(comments_cache),
         "followers": followers,
         "profiles": profiles,
+        "weibo": load_weibo(),
         "videos": videos,
     }
     text = "const RAW = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n"

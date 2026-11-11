@@ -6,6 +6,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const dataCode = fs.readFileSync(path.join(ROOT, 'site/data.js'), 'utf8');
@@ -16,14 +17,76 @@ const commentsModule = new Function(commentsCode + '; return { RAW_PACKED_COMMEN
 const RAW_PACKED_COMMENTS = commentsModule.RAW_PACKED_COMMENTS;
 
 // Helpers
+let randomState = parseInt(crypto.createHash('sha256').update(dataCode).update(commentsCode).digest('hex').slice(0, 8), 16) || 1;
+const random = () => {
+  randomState ^= randomState << 13;
+  randomState ^= randomState >>> 17;
+  randomState ^= randomState << 5;
+  return (randomState >>> 0) / 0x100000000;
+};
 const fmtNum = n => {
   if (n >= 1e8) return (n / 1e8).toFixed(1) + ' 亿';
   if (n >= 1e4) return (n / 1e4).toFixed(1) + ' 万';
   return String(n);
 };
-const shuffle = arr => { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const shuffle = arr => { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
 const pick = (arr,n) => shuffle(arr).slice(0,n);
 const fmtDur = s => { const m=Math.floor(s/60), sec=s%60; return m>0?`${m}分${sec}秒`:`${sec}秒`; };
+const commentStats = (() => {
+  const authorCounts = new Map();
+  const authorLikes = new Map();
+  const yearCounts = new Map();
+  const warmaAliases = new Set(['warma', 'warma゜', 'warma养鸽场']);
+  let topLevelCount = 0;
+  let replyCount = 0;
+  let warmaTopLevelCount = 0;
+  let warmaReplyCount = 0;
+  let mostLikedTopLevel = null;
+  const addAuthor = (name, likes) => {
+    authorCounts.set(name, (authorCounts.get(name) || 0) + 1);
+    authorLikes.set(name, (authorLikes.get(name) || 0) + (likes || 0));
+  };
+  const isWarma = name => warmaAliases.has(String(name || '').trim().toLocaleLowerCase());
+
+  Object.values(RAW_PACKED_COMMENTS).forEach(comments => {
+    comments.forEach(([name, likes, ctime, message, replies]) => {
+      topLevelCount++;
+      addAuthor(name, likes);
+      const year = new Date((ctime + 8 * 60 * 60) * 1000).getUTCFullYear();
+      yearCounts.set(year, (yearCounts.get(year) || 0) + 1);
+      if (isWarma(name)) warmaTopLevelCount++;
+      if (!mostLikedTopLevel || likes > mostLikedTopLevel.likes) {
+        mostLikedTopLevel = { name, likes, message };
+      }
+      replies.forEach(([replyName, replyLikes]) => {
+        replyCount++;
+        addAuthor(replyName, replyLikes);
+        if (isWarma(replyName)) warmaReplyCount++;
+      });
+    });
+  });
+
+  return {
+    videoCount: Object.keys(RAW_PACKED_COMMENTS).length,
+    topLevelCount,
+    replyCount,
+    totalCount: topLevelCount + replyCount,
+    warmaTopLevelCount,
+    warmaReplyCount,
+    warmaTotalCount: warmaTopLevelCount + warmaReplyCount,
+    authorCounts,
+    authorLikes,
+    yearCounts,
+    mostLikedTopLevel,
+    isWarma,
+  };
+})();
+const approximateCountOptions = count => {
+  const step = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, count))) - 1));
+  const values = [1, 0.72, 1.28, 0.48].map(multiplier => Math.max(0, Math.round(count * multiplier / step) * step));
+  for (let offset = 1; new Set(values).size < 4; offset++) values.push(count + offset * step);
+  return [...new Set(values)].slice(0, 4).map(value => `约${fmtNum(value)}条`);
+};
 
 // ─── Question Bank ───
 const questions = [];
@@ -76,7 +139,7 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const ct = correct.title.length > 40 ? correct.title.slice(0,38)+'…' : correct.title;
   add('数据之最', 'easy', 'Warma 弹幕数量最多的视频是哪一个？',
       [ct, ...wrongs], 0,
-      `弹幕数高达 ${fmtNum(correct.danmaku)}，是爆炸电台的第八期。`);
+      `弹幕数高达 ${fmtNum(correct.danmaku)}，视频发布于 ${correct.date}。`);
 }
 // Q: Most coins
 {
@@ -85,7 +148,7 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const ct = correct.title.length > 40 ? correct.title.slice(0,38)+'…' : correct.title;
   add('数据之最', 'medium', 'Warma 投币数最多的视频是哪一个？',
       [ct, ...wrongs], 0,
-      `获得了 ${fmtNum(correct.coin)} 枚硬币，是「沃玛的生活」第三期。`);
+      `获得了 ${fmtNum(correct.coin)} 枚硬币，发布于 ${correct.date}。`);
 }
 // Q: Most favorited
 {
@@ -103,7 +166,7 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const ct = correct.title.length > 40 ? correct.title.slice(0,38)+'…' : correct.title;
   add('数据之最', 'hard', 'Warma 分享数最多的视频是哪一个？',
       [ct, ...wrongs], 0,
-      `被分享了 ${fmtNum(correct.share)} 次，是 2020 拜年祭单品「诸神的奥运」。`);
+      `被分享了 ${fmtNum(correct.share)} 次，发布于 ${correct.date}。`);
 }
 // Q: Most comments
 {
@@ -112,43 +175,50 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const ct = correct.title.length > 40 ? correct.title.slice(0,38)+'…' : correct.title;
   add('数据之最', 'hard', 'Warma 评论数最多的视频是哪一个？',
       [ct, ...wrongs], 0,
-      `收到了 ${fmtNum(correct.reply)} 条评论，是爆炸电台第十一期。`);
+      `收到了 ${fmtNum(correct.reply)} 条评论，发布于 ${correct.date}。`);
 }
 // Q: How many 10M+ videos?
 {
   const count10m = videos.filter(v=>v.view>=10000000).length;
+  const examples = videos.filter(v=>v.view>=10000000).map(v=>`《${v.title}》`).join('、');
+  const countOptions = [count10m, count10m + 1, Math.max(1, count10m - 1), count10m + 2].map(n => `${n} 个`);
   add('数据之最', 'medium', `Warma 有几个视频播放量突破了 1000 万？`,
-      ['2 个', '3 个', '4 个', '5 个'], 1,
-      `有 ${count10m} 个：蜘蛛原创曲、只需要3秒的歌、以及养宠物游戏。`);
+      countOptions, 0,
+      `共有 ${count10m} 个：${examples}。`);
 }
 // Q: Longest video
 {
   const longest = [...videos].sort((a,b)=>b.duration-a.duration)[0];
-  const durStr = Math.round(longest.duration/60) + ' 分钟';
-  add('数据之最', 'medium', `Warma 最长的视频是多少分钟？`,
-      ['约 6 小时', '约 12 小时', '约 8 小时', '约 3 小时'], 1,
-      `《双影奇境》实况全篇约 ${durStr}，是目前最长的视频。`);
+  const hours = Math.round(longest.duration / 3600);
+  const hourOptions = [hours, hours + 2, Math.max(1, hours - 3), hours + 5].map(n => `约 ${n} 小时`);
+  add('数据之最', 'medium', `Warma 最长的视频时长大约多少小时？`,
+      hourOptions, 0,
+      `《${longest.title}》时长约 ${fmtDur(longest.duration)}（${(longest.duration / 60).toFixed(1)} 分钟），是当前收录中最长的视频。`);
 }
 // Q: Shortest video
 {
   const shortest = [...videos].filter(v=>v.duration>5).sort((a,b)=>a.duration-b.duration)[0];
-  add('数据之最', 'hard', `Warma 最短的视频只有多少秒？`,
-      ['12 秒', '30 秒', '45 秒', '60 秒'], 0,
-      `《啊！！！！！！！！》只有 ${shortest.duration} 秒，却充满了真情实感。`);
+  const seconds = shortest.duration;
+  const secondOptions = [seconds, seconds + 8, seconds + 18, seconds + 30].map(n => `${n} 秒`);
+  add('数据之最', 'hard', `Warma 最短的视频时长是多少秒？`,
+      secondOptions, 0,
+      `《${shortest.title}》只有 ${shortest.duration} 秒，是当前收录中最短的视频。`);
 }
 // Q: Longest gap
 {
   const maxGap = Math.max(...videos.map(v=>v.gap_days||0));
-  add('数据之最', 'hard', `Warma 最长断更是多少天？`,
-      ['约 3 个月', '约 5 个月', '约 7 个月', '约 1 年'], 2,
-      `最长断更 ${maxGap} 天（约 ${Math.round(maxGap/30)} 个月），之后发布了成都旅游合集。`);
+  const gapVideo = videos.find(v => v.gap_days === maxGap);
+  const dayOptions = [...new Set([maxGap, maxGap - 30, maxGap - 60, maxGap + 30])].map(n => `${n} 天`);
+  add('数据之最', 'hard', `Warma 最长的投稿间隔大约是多少天？`,
+      dayOptions, 0,
+      `最长间隔为 ${maxGap} 天（约 ${Math.round(maxGap/30)} 个月），之后发布《${gapVideo?.title || '后续视频'}》。`);
 }
 // Q: Subtitle champion
 {
   const champ = [...videos].sort((a,b)=>b.sub_lines-a.sub_lines)[0];
   add('数据之最', 'hard', `Warma 字幕行数最多的视频是哪一个？`,
-      ['高一生物教材讲解【直播录像】', '抓住那只鸡！！', '生日直播', '动物之森【直播录像】'], 0,
-      `高一生物教材讲解有 ${champ.sub_lines} 行字幕，是当之无愧的字幕冠军。`);
+      [champ.title, ...pick(videos.filter(v => v.bvid !== champ.bvid && v.sub_lines > 0), 3).map(v => v.title)], 0,
+      `《${champ.title}》有 ${champ.sub_lines} 行字幕，是当前收录中字幕行数最多的视频。`);
 }
 
 // Category: 发布规律 (Publishing Patterns)
@@ -157,8 +227,9 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const hourCount = {};
   videos.forEach(v => { if(v.pubdate_iso){ const h = parseInt(v.pubdate_iso.split(' ')[1].split(':')[0]); hourCount[h] = (hourCount[h]||0)+1; }});
   const topHour = Object.entries(hourCount).sort((a,b)=>b[1]-a[1])[0];
+  const hourOptions = [topHour[0], ...pick(Object.keys(hourCount).filter(hour => hour !== topHour[0]), 3)];
   add('发布规律', 'easy', `Warma 最常在什么时间发布视频？`,
-      ['中午 12 点', '下午 5 点', '晚上 8 点', '凌晨 2 点'], 0,
+      hourOptions.map(hour => `${hour} 点`), 0,
       `${topHour[0]} 点是最高频的发布时间，共 ${topHour[1]} 个视频在此时发布。`);
 }
 // Q: Most common day of week
@@ -167,8 +238,9 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const wdCount = {};
   videos.forEach(v => { if(v.date){ const d = new Date(v.date+'T12:00:00'); wdCount[wd[d.getDay()]] = (wdCount[wd[d.getDay()]]||0)+1; }});
   const topDay = Object.entries(wdCount).sort((a,b)=>b[1]-a[1])[0];
+  const dayOptions = [topDay[0], ...pick(Object.keys(wdCount).filter(day => day !== topDay[0]), 3)];
   add('发布规律', 'easy', `Warma 最常在星期几发布视频？`,
-      ['周五', '周六', '周日', '周一'], 0,
+      dayOptions, 0,
       `${topDay[0]}是最高频的发布日，共 ${topDay[1]} 个视频。`);
 }
 // Q: Most productive year
@@ -176,28 +248,37 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const yCount = {};
   videos.forEach(v => { const y = v.date?.substring(0,4); if(y) yCount[y] = (yCount[y]||0)+1; });
   const topYear = Object.entries(yCount).sort((a,b)=>b[1]-a[1])[0];
+  const yearOptions = [topYear[0], ...pick(Object.keys(yCount).filter(year => year !== topYear[0]), 3)];
   add('发布规律', 'medium', `Warma 哪一年发布的视频最多？`,
-      ['2017 年', '2018 年', '2019 年', '2020 年'], 2,
+      yearOptions.map(year => `${year} 年`), 0,
       `${topYear[0]} 年共发布了 ${topYear[1]} 个视频，是最高产的年份。`);
 }
 // Q: First video date
 {
   const first = [...videos].sort((a,b)=>new Date(a.date)-new Date(b.date))[0];
+  const firstYear = first.date.slice(0, 4);
+  const firstYearOptions = [firstYear, ...pick([...new Set(videos.map(v => v.date.slice(0, 4)))].filter(year => year !== firstYear), 3)];
   add('发布规律', 'medium', `Warma 在 B 站的第一个视频发布于什么时候？`,
-      ['2014 年', '2015 年', '2016 年', '2017 年'], 1,
+      firstYearOptions.map(year => `${year} 年`), 0,
       `第一个视频《${first.title.slice(0,20)}…》发布于 ${first.date}。`);
 }
 // Q: Total video count
 {
+  const mainCount = videos.filter(v => v.account?.includes('主号')).length;
+  const smallCount = videos.filter(v => v.account?.includes('小号')).length;
+  const totalCount = videos.length;
+  const countOptions = [totalCount, totalCount - 9, totalCount + 11, totalCount - 23].map(n => `约 ${n} 个`);
   add('发布规律', 'easy', `Warma 主号 + 小号总共发了多少个视频？`,
-      ['约 300 个', '约 350 个', '约 400 个', '约 250 个'], 1,
-      `共收录了 ${videos.length} 个视频（主号 264 + 小号 95）。`);
+      countOptions, 0,
+      `共收录 ${totalCount} 个视频（主号 ${mainCount} 个 + 小号 ${smallCount} 个）。`);
 }
 // Q: Total views
 {
+  const totalViews = videos.reduce((sum, video) => sum + (video.view || 0), 0);
+  const viewOptions = [1, 0.7, 1.2, 1.4].map(multiplier => `约 ${fmtNum(Math.round(totalViews * multiplier / 1e7) * 1e7)}`);
   add('发布规律', 'medium', `Warma 所有视频加起来总播放量大约是多少？`,
-      ['约 3 亿', '约 5 亿', '约 7 亿', '约 10 亿'], 2,
-      `总播放量高达 ${fmtNum(RAW.total_view)}！`);
+      viewOptions, 0,
+      `总播放量约 ${fmtNum(totalViews)}。`);
 }
 
 // Category: 标签与分类 (Tags & Categories)
@@ -206,8 +287,9 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const tagCount = {};
   videos.forEach(v => (v.tags||[]).forEach(t => tagCount[t.name] = (tagCount[t.name]||0)+1));
   const topTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]);
+  const tagOptions = topTags.slice(0, 4).map(([name]) => name);
   add('标签与分类', 'easy', `Warma 视频中最常用的 B 站标签是什么？`,
-      ['warma', '搞笑', '日常', '游戏'], 0,
+      tagOptions, 0,
       `"warma" 出现在 ${topTags[0][1]} 个视频中，第二名是"沃玛"（${topTags[1][1]} 次）。`);
 }
 // Q: Most common video type
@@ -215,40 +297,45 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
   const typeCount = {};
   videos.forEach(v => { if(v.type) typeCount[v.type] = (typeCount[v.type]||0)+1; });
   const topType = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])[0];
+  const typeOptions = [topType[0], ...pick(Object.keys(typeCount).filter(type => type !== topType[0]), 3)];
   add('标签与分类', 'easy', `Warma 哪种类型的视频数量最多？`,
-      ['游戏实况', '翻唱/音乐', '直播录像', '绘画/手书'], 0,
-      `游戏实况有 ${topType[1]} 个视频，占比最大。`);
+      typeOptions, 0,
+      `${topType[0]}有 ${topType[1]} 个视频，是当前收录中数量最多的类型。`);
 }
 // Q: Which type has most views
 {
   const typeView = {};
   videos.forEach(v => { if(v.type) typeView[v.type] = (typeView[v.type]||0)+(v.view||0); });
   const topTypeView = Object.entries(typeView).sort((a,b)=>b[1]-a[1])[0];
+  const typeViewOptions = [topTypeView[0], ...pick(Object.keys(typeView).filter(type => type !== topTypeView[0]), 3)];
   add('标签与分类', 'medium', `Warma 哪种类型的视频总播放量最高？`,
-      ['游戏实况', '翻唱/音乐', '绘画/手书', '爆炸电台'], 0,
-      `游戏实况总播放量高达 ${fmtNum(topTypeView[1])}。`);
+      typeViewOptions, 0,
+      `${topTypeView[0]}总播放量最高，约 ${fmtNum(topTypeView[1])}。`);
 }
 
 // Category: 梗与弹幕 (Memes & Danmaku)
 // Q: Top meme
 {
+  const topMemes = (RAW.top_memes || []).slice(0, 4);
   add('梗与弹幕', 'easy', `Warma 视频中弹幕出现次数最多的"名梗"是什么？`,
-      ['awsl', '泪目', '有生之年', '沃玛'], 0,
-      `"awsl" 出现了 ${fmtNum(RAW.top_memes[0].count)} 次，是当之无愧的弹幕之王。`);
+      topMemes.map(meme => meme.content), 0,
+      `"${topMemes[0].content}" 出现了 ${fmtNum(topMemes[0].count)} 次，是当前抓取数据中的弹幕总榜第一。`);
 }
 // Q: Second meme
 {
   const second = RAW.top_memes[1];
+  const memeOptions = RAW.top_memes.slice(1, 5).map(meme => meme.content);
   add('梗与弹幕', 'medium', `弹幕名梗榜第二名是什么？`,
-      ['[ohh]', '有生之年', '泪目', '辛苦了'], 0,
-      `"[ohh]" 表情弹幕出现了 ${fmtNum(second.count)} 次。`);
+      memeOptions, 0,
+      `"${second.content}" 出现了 ${fmtNum(second.count)} 次，位列当前抓取数据的第二名。`);
 }
 // Q: Yearly danmaku peak
 {
   const yTop = Object.entries(RAW.yearly_danmaku).sort((a,b)=>b[1]-a[1])[0];
+  const yearOptions = [yTop[0], ...pick(Object.keys(RAW.yearly_danmaku).filter(year => year !== yTop[0]), 3)];
   add('梗与弹幕', 'medium', `哪一年的弹幕最活跃？`,
-      ['2019 年', '2020 年', '2021 年', '2025 年'], 1,
-      `${yTop[0]} 年弹幕量高达 ${fmtNum(yTop[1])}，是考古高峰期。`);
+      yearOptions.map(year => `${year} 年`), 0,
+      `${yTop[0]} 年弹幕量最高，约 ${fmtNum(yTop[1])}。`);
 }
 
 // Category: 字幕探索 (Subtitle Exploration)
@@ -290,29 +377,66 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
 }
 
 // Category: 评论区 (Comments)
-// Q: Top commenter (non-Warma)
 {
-  add('评论区', 'medium', `在评论区最活跃（非 Warma 本人）的用户大约发了多少条评论？`,
-      ['约 50 条', '约 100 条', '约 200 条', '约 500 条'], 2,
-      `"账号已注销"这个用户在评论区留下了 266 条评论。`);
+  const years = [...commentStats.yearCounts].sort((a, b) => b[1] - a[1]);
+  const [peakYear, peakYearCount] = years[0];
+  const yearOptions = [String(peakYear), ...years.slice(1, 4).map(([year]) => String(year))];
+  add('评论区', 'medium', `在当前收录的一级评论中，哪一年发布的评论最多？`,
+      yearOptions.map(year => `${year} 年`), 0,
+      `${peakYear} 年有 ${fmtNum(peakYearCount)} 条一级评论；这里只统计主评论，不含楼中楼回复。`);
 }
-// Q: Most liked comment
 {
-  add('评论区', 'medium', `Warma 视频下获赞最高的评论内容是什么？`,
-      ['沃玛家里的蜘蛛数量', '《爱你在心口难开》', '新年快乐', '考古'], 0,
-      `"沃玛家里的蜘蛛数量 ↓" 获得了超过 22 万个赞，出自蜘蛛歌曲评论区。`);
+  const authors = [...commentStats.authorCounts]
+    .filter(([name]) => !commentStats.isWarma(name))
+    .sort((a, b) => b[1] - a[1]);
+  const [author, count] = authors[0];
+  add('评论区', 'hard', `按展示昵称统计（合并一级评论与回复），非 Warma 账号中哪个昵称发言条数最多？`,
+      [author, ...authors.slice(1, 4).map(([name]) => name)], 0,
+      `展示昵称“${author}”共出现 ${fmtNum(count)} 次。平台统一显示的匿名昵称可能对应多个实际账号。`);
+  const countOptions = approximateCountOptions(count);
+  add('评论区', 'medium', `当前收录中，评论与回复合计最多的非 Warma 展示昵称大约出现多少次？`,
+      countOptions, 0,
+      `最多的是展示昵称“${author}”，共出现 ${fmtNum(count)}次；匿名昵称不一定对应单一实际用户。`);
 }
-// Q: Which year had most comments
 {
-  add('评论区', 'hard', `抓取到的评论中，哪一年评论最多？`,
-      ['2019 年', '2020 年', '2021 年', '2018 年'], 0,
-      `2019 年的评论最多（2862 条），可能与热门视频集中发布有关。`);
+  const options = approximateCountOptions(commentStats.warmaTotalCount);
+  add('评论区', 'medium', `Warma 本人在当前抓取数据中一共发了多少条一级评论和回复？`,
+      options, 0,
+      `按 Warma、Warma゜和 warma养鸽场这几个展示昵称合并统计，共 ${fmtNum(commentStats.warmaTotalCount)}条，其中一级评论 ${commentStats.warmaTopLevelCount}条、回复 ${commentStats.warmaReplyCount}条。`);
 }
-// Q: Warma replies
 {
-  add('评论区', 'hard', `Warma 本人在评论区发了大约多少条评论/回复？`,
-      ['约 50 条', '约 150 条', '约 300 条', '约 500 条'], 2,
-      `Warma 本人在评论区留下了约 350 条评论和回复。`);
+  const [author, likes] = [...commentStats.authorLikes]
+    .filter(([name]) => !commentStats.isWarma(name))
+    .sort((a, b) => b[1] - a[1])[0];
+  const options = [...commentStats.authorLikes]
+    .filter(([name]) => !commentStats.isWarma(name))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([name]) => name);
+  add('评论区', 'hard', `按抓取到的点赞数合计，非 Warma 展示昵称中哪位获得的赞最多？`,
+      options, 0,
+      `“${author}”名下一级评论与回复共获得 ${fmtNum(likes)}赞；昵称合并不代表账号身份去重。`);
+}
+{
+  const { name, likes, message } = commentStats.mostLikedTopLevel;
+  const preview = String(message || '').replace(/\s+/g, ' ').trim();
+  const byLikes = Object.values(RAW_PACKED_COMMENTS).flat().sort((a, b) => b[1] - a[1]);
+  const options = [];
+  const seen = new Set();
+  for (const comment of byLikes) {
+    const text = String(comment[3] || '').replace(/\s+/g, ' ').trim();
+    const choice = text.length > 48 ? `${text.slice(0, 47)}…` : text;
+    if (!choice || seen.has(choice)) continue;
+    seen.add(choice);
+    options.push(choice);
+    if (options.length === 4) break;
+  }
+  const answer = options.findIndex(choice => preview.startsWith(choice.replace(/…$/, '')) || choice.startsWith(preview.slice(0, 47)));
+  if (options.length === 4 && answer >= 0) {
+    add('评论区', 'medium', `当前抓取的一级评论中，哪条评论获得的赞数最高？`,
+        options, answer,
+        `最高赞一级评论来自“${name}”，获 ${fmtNum(likes)} 个赞；不包含回复点赞。`);
+  }
 }
 
 // Category: 深度对比 (Deep Comparisons)
@@ -343,8 +467,8 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
 // Q: Total danmaku
 {
   add('深度对比', 'medium', `Warma 所有视频的总弹幕数大约是多少？`,
-      ['约 50 万', '约 100 万', '约 150 万', '约 200 万'], 1,
-      `总弹幕数约 ${fmtNum(videos.reduce((s,v)=>s+(v.danmaku||0),0))}，超过百万！`);
+      ['约 300 万', '约 370 万', '约 420 万', '约 500 万'], 1,
+      `总弹幕数约 ${fmtNum(videos.reduce((s,v)=>s+(v.danmaku||0),0))}。`);
 }
 // Q: Total likes
 {
@@ -355,7 +479,7 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
 // Q: Total subtitle lines
 {
   add('深度对比', 'hard', `Warma 所有视频的字幕加起来大约有多少行？`,
-      ['约 1 万行', '约 3 万行', '约 6 万行', '约 10 万行'], 2,
+      ['约 6 万行', '约 10 万行', '约 16 万行', '约 25 万行'], 2,
       `总字幕行数约 ${fmtNum(RAW.total_sub_lines)} 行，总字符约 ${fmtNum(videos.reduce((s,v)=>s+(v.sub_chars||0),0))} 字。`);
 }
 
@@ -420,11 +544,11 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
       ['约 50 万条', '约 80 万条', '约 114 万条', '约 200 万条'], 2,
       `共扒取了 1,143,403 条弹幕数据。`);
 }
-// Q: Total comments scraped
 {
-  add('冷知识', 'hard', `Warma 百科总共扒取了多少条评论？`,
-      ['约 5000 条', '约 10000 条', '约 18000 条', '约 50000 条'], 2,
-  `共扒取了 17,807 条评论（含回复），覆盖 358 个视频。`);
+  const options = approximateCountOptions(commentStats.totalCount);
+  add('冷知识', 'hard', `当前收录的评论数据包含多少条一级评论与回复？`,
+      options, 0,
+      `共 ${fmtNum(commentStats.totalCount)}条，其中一级评论 ${fmtNum(commentStats.topLevelCount)}条、回复 ${fmtNum(commentStats.replyCount)}条，来自 ${commentStats.videoCount}个视频。`);
 }
 
 // ═══ Category: 视频内容 (Video Content) ═══
@@ -752,26 +876,6 @@ const topReply = [...videos].sort((a,b)=>b.reply-a.reply);
 }
 
 // 评论区
-{
-  add('评论区', 'hard', `抓取到的评论中，点赞最高的评论内容是什么？`,
-      ['沃玛家里的蜘蛛数量 ↓', '《爱你在心口难开》', '我 眼 前 一 黑', '谢谢沃玛'], 0,
-      `这条评论在《我家里有蜘蛛！！！》下有 223,347 个赞。`);
-}
-{
-  add('评论区', 'hard', `抓取到的评论中，点赞最高的评论是谁发的？`,
-      ['初音厨凯文君', '前辈太差劲了', 'Warma', 'RayShiki'], 0,
-      `初音厨凯文君的“沃玛家里的蜘蛛数量 ↓”有 223,347 个赞。`);
-}
-{
-  add('评论区', 'hard', `抓取到的评论中，发言最多的非 Warma 本人是哪个用户？`,
-      ['账号已注销', 'Warma゜', '怒九笑', '订做美味鱼卷'], 0,
-      `账号已注销共发了 266 条评论/回复。`);
-}
-{
-  add('评论区', 'hard', `抓取到的评论中，非 Warma 本人的总获赞最高用户是谁？`,
-      ['怒九笑', '账号已注销', 'Warma゜', '捏碳碳碳碳'], 0,
-      `怒九笑约 1,746,060 个赞。`);
-}
 {
   add('评论区', 'hard', `《我家里有蜘蛛！！！》的点赞最高的评论是谁发的？`,
       ['初音厨凯文君', '耶合没有鸟', '前辈太差劲了', 'Warma'], 0,
@@ -1712,56 +1816,201 @@ videos.filter(v => v.duration > 0 && v.sub_lines > 0)
       `《${video.title}》约 ${video.duration} 秒、${video.sub_lines} 行字幕，密度约 ${video.lineDensity.toFixed(1)} 行/分钟。`);
   });
 
-// 判断题：年度、账号、类型与标签的硬数据校验
-[
-  ['2019 年的总播放量高于 2020 年。', true, '2019 年约 1.11 亿，2020 年约 1.04 亿。', 'medium'],
-  ['2020 年的总点赞数高于 2019 年。', true, '2020 年约 754.17 万，2019 年约 530.92 万。', 'medium'],
-  ['2022 年的总弹幕数高于 2021 年。', false, '2022 年约 35.05 万，2021 年约 41.17 万。', 'hard'],
-  ['2018 年的总投币数高于 2017 年。', true, '2018 年约 63.56 万，2017 年约 39.46 万。', 'medium'],
-  ['2015 年的视频总时长高于 2016 年。', false, '2015 年约 228 秒，2016 年约 17,697 秒。', 'hard'],
-  ['主号的总播放量高于小号。', true, '主号约 6.04 亿，小号约 1.04 亿。', 'easy'],
-  ['小号的总收藏数高于主号。', true, '小号约 208.83 万，主号约 1,254.11 万。', 'hard'],
-  ['主号的总投币数高于小号。', true, '主号约 1,676.75 万，小号约 150.01 万。', 'medium'],
-  ['小号的总分享数低于主号。', true, '小号约 17.43 万，主号约 161.72 万。', 'medium'],
-  ['游戏实况类视频数量最多。', true, '当前收录中有 150 个游戏实况类视频。', 'easy'],
-  ['翻唱/音乐类视频总播放量高于直播录像类。', true, '翻唱/音乐约 1.86 亿，直播录像约 1,556 万。', 'medium'],
-  ['绘画/手书类视频总点赞数高于爆炸电台类。', true, '绘画/手书约 658.62 万，爆炸电台约 236.86 万。', 'medium'],
-  ['“创意”标签的平均单视频播放量高于“手书”标签。', true, '“创意”约 475.15 万，“手书”约 381.92 万。', 'hard'],
-  ['“原创动画”标签的平均单视频点赞量高于“脑洞”标签。', true, '“原创动画”约 34.77 万，“脑洞”约 31.94 万。', 'hard'],
-  ['“搞笑”标签的平均单视频播放量高于“怒九”标签。', true, '“搞笑”约 336.12 万，“怒九”约 253.21 万。', 'medium'],
-  ['“沃玛”标签的平均单视频点赞量高于“warma”标签。', true, '“沃玛”约 15.41 万，“warma”约 11.52 万。', 'hard'],
-  ['“直播录像”标签的平均单视频播放量低于“实况”标签。', true, '“直播录像”约 33.11 万，“实况”约 252.89 万。', 'medium'],
-  ['2026 年的总弹幕数低于 2025 年。', true, '2026 年约 19.21 万，2025 年约 21.24 万。', 'medium'],
-  ['2026 年的总播放量低于 2024 年。', true, '2026 年约 4,719 万，2024 年约 8,700 万。', 'medium'],
-  ['2020 年的总投币数低于 2019 年。', false, '2020 年约 391.78 万，2019 年约 246.02 万。', 'hard'],
-  ['2021 年的总分享数高于 2022 年。', false, '2021 年约 17.54 万，2022 年约 24.33 万。', 'hard'],
-  ['2024 年的总收藏数高于 2023 年。', true, '2024 年约 195.66 万，2023 年约 154.25 万。', 'hard'],
-  ['2025 年的总评论/回复数低于 2024 年。', true, '2025 年约 6.70 万，2024 年约 8.53 万。', 'hard'],
-  ['2017 年的视频数量少于 2018 年。', false, '2017 年 57 个，2018 年 32 个。', 'medium'],
-  ['2019 年的视频数量多于 2018 年。', true, '2019 年 64 个，2018 年 32 个。', 'easy'],
-].forEach(([statement, isTrue, explanation, difficulty]) => {
-  addUniqueTrueFalse('冷知识', difficulty, statement, isTrue, explanation);
+// 判断题使用当前数据计算比较结果，避免题干、答案和解析随数据更新而失配。
+const addComparisonTrueFalse = (category, leftName, leftValue, rightName, rightValue, metricLabel, difficulty, invert = false) => {
+  if (!Number.isFinite(leftValue) || !Number.isFinite(rightValue) || leftValue === rightValue) return;
+  const [claimLeftName, claimLeftValue, claimRightName, claimRightValue] = invert
+    ? [rightName, rightValue, leftName, leftValue]
+    : [leftName, leftValue, rightName, rightValue];
+  const isTrue = claimLeftValue > claimRightValue;
+  addUniqueTrueFalse(category, difficulty,
+    `${claimLeftName}的${metricLabel}高于${claimRightName}。`, isTrue,
+    `${claimLeftName}：${fmtNum(claimLeftValue)}；${claimRightName}：${fmtNum(claimRightValue)}。`);
+};
+
+/**
+ * 年度对比判断题：把「2015的播放量高于2016」这种裸年份题补成完整语境，
+ * 并在解析里给出两年的实际数值，避免读者靠年份顺序瞎猜。
+ */
+const addYearComparison = (leftYear, leftValue, rightYear, rightValue, metricLabel, difficulty, invert = false) => {
+  if (!Number.isFinite(leftValue) || !Number.isFinite(rightValue) || leftValue === rightValue) return;
+  const [aYear, aValue, bYear, bValue] = invert
+    ? [rightYear, rightValue, leftYear, leftValue]
+    : [leftYear, leftValue, rightYear, rightValue];
+  addUniqueTrueFalse('深度对比', difficulty,
+    `${aYear} 年投稿视频的${metricLabel}超过 ${bYear} 年。`, aValue > bValue,
+    `${aYear} 年：${fmtNum(aValue)}；${bYear} 年：${fmtNum(bValue)}。`);
+};
+
+const accountStats = {};
+videos.forEach(video => {
+  const account = video.account?.includes('主号') ? '主号' : video.account?.includes('小号') ? '小号' : null;
+  if (!account) return;
+  accountStats[account] ??= { count: 0, view: 0, like: 0, danmaku: 0, coin: 0, favorite: 0, share: 0, reply: 0 };
+  accountStats[account].count++;
+  ['view', 'like', 'danmaku', 'coin', 'favorite', 'share', 'reply'].forEach(metric => {
+    accountStats[account][metric] += video[metric] || 0;
+  });
+});
+const metricLabels = {
+  view: '播放量', like: '点赞数', danmaku: '弹幕数', coin: '投币数',
+  favorite: '收藏数', share: '分享数', reply: '评论/回复数',
+};
+const metrics = ['view', 'like', 'danmaku', 'coin', 'favorite', 'share', 'reply'];
+
+// 账号对比覆盖各项互动数据，解析直接列出两边的当前总量。
+metrics.forEach((metric, index) => {
+  addComparisonTrueFalse('深度对比', '主号', accountStats['主号']?.[metric], '小号', accountStats['小号']?.[metric], metricLabels[metric], 'medium', index % 2 === 1);
 });
 
-// 年度平均：把总量问题下沉到“平均每个视频”的维度
-[
-  ['view', '播放量'], ['like', '点赞数'], ['danmaku', '弹幕数'],
-].forEach(([metric, label]) => {
-  for (let year = 2016; year <= 2025; year++) {
-    const stat = advancedYearStats[String(year)];
-    if (!stat) continue;
-    const total = stat[metric] || 0;
-    if (total <= 0) continue;
-    const count = videos.filter(v => (v.date || '').startsWith(String(year))).length;
-    const avg = total / Math.max(1, count);
-    const options = approximateMetricOptions(avg);
-    if (options.length < 4) continue;
-    addUnique('数据之最', 'hard',
-      `在 ${year} 年，平均每个视频的${label}最接近哪个数值？`,
-      options, 0,
-      `主号 + 小号在 ${year} 年共 ${count} 个视频，平均每个视频${label} ${fmtNum(avg)}。`);
-  }
+// 年度对比：改成「哪一年最高」的选择题。裸年份判断题既没有语境，也能靠年份
+// 顺序瞎猜；这里用真实数据算出峰值年份，解析同时给出完整年度排名。
+const yearKeys = Object.keys(advancedYearStats).sort();
+yearKeys.forEach(year => {
+  advancedYearStats[year].count = videos.filter(video => (video.date || '').startsWith(year)).length;
 });
+const yearRankings = {
+  count: [...yearKeys].sort((a, b) => advancedYearStats[b].count - advancedYearStats[a].count),
+  view: [...yearKeys].sort((a, b) => advancedYearStats[b].view - advancedYearStats[a].view),
+  like: [...yearKeys].sort((a, b) => advancedYearStats[b].like - advancedYearStats[a].like),
+  danmaku: [...yearKeys].sort((a, b) => advancedYearStats[b].danmaku - advancedYearStats[a].danmaku),
+};
+[
+  ['count', '投稿视频数', 'medium'],
+  ['view', '播放量', 'hard'],
+  ['like', '点赞量', 'hard'],
+  ['danmaku', '弹幕量', 'hard'],
+].forEach(([metric, label, difficulty]) => {
+  const ranking = yearRankings[metric];
+  if (ranking.length < 4) return;
+  const correct = ranking[0];
+  const wrongs = ranking.slice(1, 4);
+  addUnique('深度对比', difficulty,
+    `按当前收录数据，哪一年的${label}最高？`,
+    [correct, ...wrongs].map(year => `${year} 年`), 0,
+    `${correct} 年为 ${fmtNum(advancedYearStats[correct][metric])}，其后依次是 `
+      + wrongs.map(year => `${year} 年（${fmtNum(advancedYearStats[year][metric])}）`).join('、') + '。');
+});
+
+// 类型对比使用当前分类统计，类别不足或字段缺失时跳过。
+const typeStats = {};
+videos.forEach(video => {
+  const type = video.type || '未标注';
+  typeStats[type] ??= { count: 0, view: 0, like: 0, danmaku: 0, coin: 0, favorite: 0, share: 0, reply: 0 };
+  typeStats[type].count++;
+  metrics.forEach(metric => { typeStats[type][metric] += video[metric] || 0; });
+});
+const typeNames = Object.keys(typeStats).filter(type => typeStats[type].count >= 4).sort();
+['view', 'like', 'danmaku', 'coin'].forEach((metric, index) => {
+  if (typeNames.length < 2) return;
+  const left = typeNames[index % typeNames.length];
+  const right = typeNames[(index + 3) % typeNames.length];
+  if (left === right) return;
+  addComparisonTrueFalse('深度对比', `${left}类`, typeStats[left][metric], `${right}类`, typeStats[right][metric], metricLabels[metric], 'hard', index % 2 === 1);
+});
+
+// 标签对比从高频标签中抽取不同位次，交替陈述方向以保持判断题答案均衡。
+const quizTagCounts = {};
+videos.forEach(video => (video.tags || []).forEach(tag => {
+  const name = tag.name || tag;
+  quizTagCounts[name] = (quizTagCounts[name] || 0) + 1;
+}));
+const tagEntries = Object.entries(quizTagCounts).sort((a, b) => b[1] - a[1]);
+[[0, 3], [1, 5], [2, 7], [3, 8], [4, 9], [5, 10], [6, 11], [7, 12]].forEach(([aIndex, bIndex], index) => {
+  const a = tagEntries[aIndex];
+  const b = tagEntries[bIndex];
+  if (!a || !b) return;
+  addComparisonTrueFalse('标签与分类', `“${a[0]}”标签`, a[1], `“${b[0]}”标签`, b[1], '出现次数', 'medium', index % 2 === 1);
+});
+
+// 发布时段：比较高频与低频时段，数据变化时自动更新判断和解析。
+const publishCounts = { month: {}, weekday: {}, hour: {} };
+const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+videos.forEach(video => {
+  if (video.date) {
+    const date = new Date(`${video.date}T12:00:00`);
+    const month = String(date.getMonth() + 1);
+    const weekday = weekdays[date.getDay()];
+    publishCounts.month[month] = (publishCounts.month[month] || 0) + 1;
+    publishCounts.weekday[weekday] = (publishCounts.weekday[weekday] || 0) + 1;
+  }
+  const hour = video.pubdate_iso?.match(/\s(\d{2}):/)?.[1];
+  if (hour != null) publishCounts.hour[hour] = (publishCounts.hour[hour] || 0) + 1;
+});
+[
+  ['month', '月份', name => `${name}月`],
+  ['weekday', '星期', name => name],
+  ['hour', '发布时间', name => `${Number(name)}点`],
+].forEach(([key, metricLabel, formatName], index) => {
+  const sorted = Object.entries(publishCounts[key]).sort((a, b) => b[1] - a[1]);
+  if (sorted.length < 2) return;
+  const [a, b] = sorted;
+  addComparisonTrueFalse('发布规律', formatName(a[0]), a[1], formatName(b[0]), b[1], '视频数', 'medium', index % 2 === 1);
+});
+
+// 总量阈值题依据聚合结果确定答案，解释保留精确值供玩家核对。
+const totalStats = {
+  '视频数': videos.length,
+  '播放量': videos.reduce((sum, video) => sum + (video.view || 0), 0),
+  '点赞数': videos.reduce((sum, video) => sum + (video.like || 0), 0),
+  '弹幕数': videos.reduce((sum, video) => sum + (video.danmaku || 0), 0),
+  '投币数': videos.reduce((sum, video) => sum + (video.coin || 0), 0),
+  '收藏数': videos.reduce((sum, video) => sum + (video.favorite || 0), 0),
+  '分享数': videos.reduce((sum, video) => sum + (video.share || 0), 0),
+  '评论/回复数': videos.reduce((sum, video) => sum + (video.reply || 0), 0),
+  '视频总时长（秒）': videos.reduce((sum, video) => sum + (video.duration || 0), 0),
+};
+  const thresholds = {
+  '视频数': [350, 400], '播放量': [700000000, 750000000], '点赞数': [40000000, 45000000],
+  '弹幕数': [3500000, 4000000], '投币数': [18000000, 20000000], '收藏数': [14000000, 16000000],
+  '分享数': [1700000, 2000000], '评论/回复数': [900000, 1000000],
+  '视频总时长（秒）': [720000, 792000],
+};
+Object.entries(thresholds).forEach(([label, values]) => {
+  values.forEach(threshold => {
+  const actual = totalStats[label];
+  const isTrue = actual > threshold;
+  const statement = label === '视频总时长（秒）'
+    ? `当前收录视频的总时长超过 ${Math.round(threshold / 36000) * 10} 小时。`
+    : `当前收录的${label === '视频数' ? '' : '视频总'}${label}超过 ${fmtNum(threshold)}${label === '视频数' ? ' 个' : ''}。`;
+  addUniqueTrueFalse('冷知识', 'medium', statement, isTrue,
+    `当前统计为 ${label === '视频总时长（秒）' ? `${fmtNum(actual)} 秒（${(actual / 3600).toFixed(1)} 小时）` : fmtNum(actual)}。`);
+  });
+});
+
+// Use near-rank comparisons rather than eight predictable true top-ten claims.
+const rankedMemes = RAW.top_memes || [];
+[[0, 1], [2, 3], [4, 6], [7, 9], [10, 12], [14, 17], [18, 21], [23, 27]].forEach(([aIndex, bIndex], index) => {
+  const a = rankedMemes[aIndex];
+  const b = rankedMemes[bIndex];
+  if (!a || !b || a.count === b.count) return;
+  const claimA = index % 2 === 0 ? a : b;
+  const claimB = claimA === a ? b : a;
+  addUniqueTrueFalse('梗与弹幕', 'medium',
+    `弹幕总榜中，“${claimA.content}”的出现次数高于“${claimB.content}”。`, claimA.count > claimB.count,
+    `“${a.content}”出现 ${fmtNum(a.count)} 次，“${b.content}”出现 ${fmtNum(b.count)} 次。`);
+});
+
+// 账号资料来自 RAW，避免粉丝数、等级、签名等资料变更后题库仍使用旧答案。
+const mainProfile = RAW.profiles?.Warma;
+const smallProfile = RAW.profiles?.['warma养鸽场'];
+if (mainProfile && smallProfile) {
+  addUniqueTrueFalse('冷知识', 'medium', 'Warma 主号粉丝数已经超过 500 万。', mainProfile.fans > 5000000,
+    `主号当前粉丝数为 ${fmtNum(mainProfile.fans)}。`);
+  addUniqueTrueFalse('冷知识', 'medium', '小号粉丝数已经超过 150 万。', smallProfile.fans > 1500000,
+    `小号当前粉丝数为 ${fmtNum(smallProfile.fans)}。`);
+  addUniqueTrueFalse('冷知识', 'hard', 'Warma 的主号等级和小号等级都是 6 级。', mainProfile.level === 6 && smallProfile.level === 6,
+    `主号为 ${mainProfile.level} 级，小号为 ${smallProfile.level} 级。`);
+  addUniqueTrueFalse('冷知识', 'medium', 'Warma 主号粉丝数不到小号的 3 倍。', mainProfile.fans < smallProfile.fans * 3,
+    `主号约 ${fmtNum(mainProfile.fans)} 粉，小号约 ${fmtNum(smallProfile.fans)} 粉，比例约 ${(mainProfile.fans / smallProfile.fans).toFixed(2)} 倍。`);
+  addUniqueTrueFalse('冷知识', 'hard', 'Warma 的主号等级低于小号。', mainProfile.level < smallProfile.level,
+    `主号为 ${mainProfile.level} 级，小号为 ${smallProfile.level} 级。`);
+  addUniqueTrueFalse('冷知识', 'hard', 'Warma 的小号简介里没有合作邮箱。', !/合作邮箱/.test(smallProfile.sign || ''),
+    `小号简介：${smallProfile.sign}`);
+  addUniqueTrueFalse('冷知识', 'hard', 'Warma 的主号和小号简介里都写了合作邮箱。',
+    /合作邮箱/.test(mainProfile.sign || '') && /合作邮箱/.test(smallProfile.sign || ''),
+    `主号简介：${mainProfile.sign}；小号简介：${smallProfile.sign}`);
+}
 
 // 视频转化率：把播放量、点赞、弹幕、评论的相对效率拆成可考察的硬数据
 const rateText = p => p >= 1 ? `${p.toFixed(2)}%` : `${p.toFixed(3)}%`;
@@ -1800,13 +2049,20 @@ const premiumMetricMap = {
   favorite: '收藏数',
   share: '分享数',
 };
+const yearlyPremiumMetricPairs = [
+  ['view', 'like'], ['danmaku', 'coin'], ['favorite', 'share'],
+  ['view', 'danmaku'], ['like', 'coin'], ['favorite', 'view'],
+  ['share', 'like'], ['danmaku', 'favorite'], ['coin', 'view'], ['share', 'danmaku'],
+];
 for (let year = 2016; year <= 2025; year++) {
   const pool = videos.filter(v => v.date.startsWith(String(year)));
-  Object.entries(premiumMetricMap).forEach(([metric, label]) => {
+  const metricPair = yearlyPremiumMetricPairs[year - 2016] || ['view', 'like'];
+  metricPair.forEach(metric => {
+    const label = premiumMetricMap[metric];
     const sorted = pool.slice().sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
     if (sorted.length < 4) return;
     const correct = sorted[0];
-    const wrongs = pick(pool.filter(v => v.bvid !== correct.bvid && (v[metric] || 0) < (correct[metric] || 0)), 3).map(premiumTitle);
+    const wrongs = pick(sorted.slice(1, 15), 3).map(premiumTitle);
     if (wrongs.length < 3) return;
     const difficulty = ['view', 'like', 'danmaku'].includes(metric) ? 'medium' : 'hard';
     add('数据之最', difficulty,
@@ -1850,162 +2106,93 @@ videos.forEach(v => (v.tags || []).forEach(t => {
       `“${a}”出现 ${ac} 次，“${b}”出现 ${bc} 次。`);
 });
 
-// 判断题：总览、发布规律、标签与弹幕的硬数据校验
-[
-  ['当前收录的两个账号共有 359 个视频。', true, '当前共收录主号 264 个、小号 95 个，合计 359 个视频。', 'medium'],
-  ['当前收录的视频总播放量已经超过 7 亿。', true, '合计播放量为 708,304,191。', 'easy'],
-  ['当前收录的视频总点赞数已经超过 4000 万。', true, '合计点赞数为 42,521,929。', 'easy'],
-  ['当前收录的视频总弹幕数已经超过 350 万条。', true, '合计弹幕数为 3,687,721 条。', 'medium'],
-  ['当前收录的视频总投币数已经超过 1800 万。', true, '合计投币数为 18,267,591 枚。', 'medium'],
-  ['当前收录的视频总收藏数已经超过 1400 万。', true, '合计收藏数为 14,629,350 次。', 'medium'],
-  ['当前收录的视频总分享数已经超过 170 万。', true, '合计分享数为 1,791,539 次。', 'medium'],
-  ['当前收录的视频总评论/回复数已经超过 90 万条。', true, '合计评论/回复数为 951,565 条。', 'medium'],
-  ['当前收录的视频总时长已经超过 200 小时。', true, '总时长为 764,636 秒，约 212.4 小时。', 'medium'],
-  ['主号视频数量是小号的 2.5 倍以上。', true, '主号 264 个，小号 95 个，约 2.8 倍。', 'hard'],
-  ['2024 年发布的视频数量多于 2018 年。', false, '2024 年 30 个，2018 年 32 个，2024 年更少。', 'medium'],
-  ['2022 年发布的视频数量少于 2023 年。', false, '2022 年 24 个，2023 年 19 个，2022 年更多。', 'medium'],
-  ['2026 年发布的视频数量多于 2025 年。', false, '当前收录中 2026 年 21 个，2025 年 25 个。', 'medium'],
-  ['小号视频数量已经超过主号的一半。', false, '小号 95 个不到主号 264 个的一半。', 'hard'],
-  ['10 月是当前数据里发布视频最多的自然月。', true, '10 月 33 个，是当前最高频的自然月。', 'medium'],
-  ['周五是当前数据里发布视频最多的星期。', true, '周五 136 个，是当前最高频的星期。', 'easy'],
-  ['中午 12 点是当前数据里发布视频最多的小时。', true, '12 点有 119 个视频，是最高频发布时段。', 'medium'],
-  ['“warma”标签的出现次数超过“沃玛”标签。', true, 'warma 312 次，沃玛 238 次。', 'easy'],
-  ['“WARMA”标签比“warma”标签更常见。', false, 'WARMA 29 次，warma 312 次，大小写标签分开统计。', 'hard'],
-  ['“搞笑”标签在当前所有标签里排名第 3。', true, '搞笑 79 次，仅次于 warma 和沃玛。', 'medium'],
-  ['“怒九”标签的出现次数多于“日常”标签。', true, '怒九 48 次，日常 39 次。', 'medium'],
-  ['“独立游戏”标签比“实况”标签更常见。', true, '独立游戏 33 次，实况 30 次。', 'medium'],
-  ['“手书”标签比“脑洞”标签更常见。', true, '手书 35 次，脑洞 34 次。', 'hard'],
-  ['“steam”标签比“switch”标签更常见。', true, 'steam 21 次，switch 15 次。', 'hard'],
-  ['“单机联机”标签与“手机游戏”标签出现次数相同。', true, '两者都出现 23 次。', 'hard'],
-  ['当前弹幕总榜第一是“awsl”。', true, 'awsl 共 8,554 次。', 'easy'],
-  ['当前弹幕总榜第二是“[ohh]”。', true, '[ohh] 共 3,670 次。', 'medium'],
-  ['当前弹幕总榜第三是“有生之年”。', true, '有生之年共 3,608 次。', 'medium'],
-  ['当前弹幕总榜第四是“泪目”。', true, '泪目共 3,356 次。', 'medium'],
-  ['当前弹幕总榜第五是“辛苦了”。', true, '辛苦了共 2,319 次。', 'medium'],
-  ['当前弹幕总榜第六是“沃玛”。', true, '沃玛共 2,284 次。', 'hard'],
-  ['当前弹幕总榜第七是“害怕”。', true, '害怕共 2,194 次。', 'hard'],
-  ['当前弹幕总榜第八是“拜拜”。', true, '拜拜共 2,117 次。', 'hard'],
-  ['当前弹幕总榜第九是“俺也一样”。', true, '俺也一样共 1,991 次。', 'hard'],
-  ['当前弹幕总榜第十是“新年快乐！”。', true, '新年快乐！共 1,851 次。', 'hard'],
-  ['Warma 主号粉丝数已经超过 500 万。', true, '主号当前约 5,146,929 粉。', 'medium'],
-  ['小号粉丝数已经超过 150 万。', true, '小号当前约 1,508,866 粉。', 'medium'],
-  ['Warma 主号粉丝数大约是小号的 3 倍多。', true, '约 515 万 ÷ 约 151 万 ≈ 3.4 倍。', 'hard'],
-  ['Warma 的主号等级和小号等级都是 6 级。', true, '两个账号当前都是 B 站 6 级。', 'hard'],
-  ['Warma 的主号和小号简介里都写了同一个合作邮箱。', true, '两个账号都写了 chickenfish@vip.qq.com。', 'hard'],
-].forEach(([statement, isTrue, explanation, difficulty]) => {
-  addTrueFalse('冷知识', difficulty, statement, isTrue, explanation);
-});
-
-// ─── Shuffle options & randomize answer positions ───
+// ─── Quality gate ───
+// Validate structure broadly, then limit repetitive templates instead of maintaining
+// a brittle allowlist of question wording.
 const finalQuestions = [];
 const seenQuestion = new Set();
- 
-// ─── Quality gate ───
-// 目标不是堆数量，而是保留可考据、有具体信息、选项同构、模板复制度低的题目。
-// 生成逻辑仍可保留原始候选，但输出必须通过这道质量闸，避免后续重跑时低质题回潮。
+const knownCategories = new Set([
+  '数据之最', '发布规律', '标签与分类', '梗与弹幕', '字幕探索',
+  '评论区', '深度对比', '冷知识', '视频内容', '考古经典',
+]);
 const lowQualityPatterns = [
-  /评论区里点赞最高的评论是谁发的/,
-  /里出现次数最多的弹幕是哪一个/,
-  /排行榜最高到达过第几名/,
   /转化率大约是多少/,
-  /平均每个视频的/,
   /以下哪个标签的.*最高/,
   /哪一个是更常用的 B 站标签/,
   /哪一个是出现次数更多的弹幕/,
   /字幕行数密度/,
-  /在 \d{4} 年发布了多少个视频/,
+  /排行榜最高到达过第几名/,
+  /弹幕最密集的片段大约从几秒开始/,
   /主号 \+ 小号的.+总量最接近/,
   /所有视频加起来的总时长/,
-  /在 \d{4} 年发布的全部视频里/,
-  /在「.+?」类视频里/,
-  /在 .+? 的早期视频里/,
-  /在 2015–2021 的考古视频里/,
+  // 机械式年度判断题：题干只有「某年某指标高于某年」，既没有上下文，也能靠年份顺序瞎猜。
+  /^\d{4}\s*年?的?(播放量|点赞数|弹幕数|投币数|收藏数|分享数|评论数?|视频数)高于\d{4}/,
+  // 机械式账号判断题：同义反复，缺乏可讨论的内容。
+  /^(主号|小号)的?(播放量|点赞数|弹幕数|投币数|收藏数|分享数|评论数?|视频数)(高于|多于|少于|低于)(主号|小号)/,
 ];
-// 单片“弹幕最高频”题只保留少数真正有记忆点的作品，其余一律视为统计搬运。
-const selectedTopDanmakuPatterns = [
-  /^《我制作了免费的养宠物游戏！》/,
-  /^《我阻止了地球末日！》/,
-  /^《姐妹俩一起玩！【Vlog】》/,
-];
-const contentQuizRule = (text) =>
-  /^(《只需要3秒|《我家里有蜘蛛|《诸神的奥运|《我已经是自娱自乐|《读评论|《姐妹俩一起玩|《迟来的自我介绍|《次时代高级写实儿童画)/.test(text);
-const isQualityQuestion = (q) => {
-  const text = q.q || '';
-  if (lowQualityPatterns.some(re => re.test(text))) return false;
-  if (/弹幕(中)?出现次数最(高|多的梗)/.test(text) && !selectedTopDanmakuPatterns.some(re => re.test(text))) return false;
-
-  switch (q.category) {
-    case '数据之最':
-      // 保留具体作品之最、核心账号对比，剔除“所有视频总 X 大约多少”的数值搬运。
-      return !/^Warma 所有视频的总(投币|分享|收藏)/.test(text) &&
-        !/^Warma 所有视频的评论\/回复总数大约/.test(text) &&
-        !/^Warma 主号和小号谁的字幕行数/.test(text) &&
-        !/^Warma 主号和小号谁的评论\/回复数/.test(text);
-
-    case '发布规律':
-      return /^Warma (最常|哪一年|在 B 站的第一个视频|主号 \+ 小号总共|所有视频|最近发布|最长断更)/.test(text) ||
-        contentQuizRule(text) && /发布于哪一年/.test(text);
-
-    case '标签与分类':
-      return /^Warma (视频中|哪种类型的视频(数量|总播放量)最多)/.test(text) ||
-        /^Warma 视频中标签数量第二名|^排除 warma、沃玛、WARMA 后/.test(text) ||
-        contentQuizRule(text) && /(标签|类型|属于哪一类)/.test(text);
-
-    case '梗与弹幕':
-      return /^Warma 视频中弹幕|弹幕名梗榜第二名|哪一年的弹幕最活跃/.test(text) ||
-        contentQuizRule(text) && /弹幕/.test(text) ||
-        /^《(我制作了免费的养宠物游戏！|我阻止了地球末日！|小时候最害怕的一对情侣|轨道双子星)/.test(text);
-
-    case '字幕探索':
-      return /^(以下哪句话出自|沃玛制作的免费游戏|2026 年字幕行数最多|Warma 的第一个视频|以下哪个视频的字幕最多)/.test(text) ||
-        /^《(我家里有蜘蛛|只需要3秒|轨道双子星|小时候最害怕|出国！去逛全球最大的游戏展吧！|诸神的奥运|读评论|我已经是自娱自乐|姐妹俩一起玩|沃玛的新番|下雨天给地上的鱼打伞不可以吗？！)/.test(text);
-
-    case '评论区':
-      // 只保留可考据的全站型结论；去掉年度计数、数量估算和重复问作者的题。
-      return /^(Warma 视频下获赞最高|抓取到的评论中，(点赞最高的评论内容|发言最多的非 Warma 本人是哪个用户|非 Warma 本人的总获赞最高用户))/.test(text);
-
-    case '深度对比':
-      // 保留主/小号的核心规模差异；批量拆成弹幕、分享、点赞、视频数倍数的题没有记忆价值。
-      return /^(Warma 主号总播放量|Warma 主号的粉丝数|点赞率最高|Warma 主号和小号谁的平均单集时长)/.test(text);
-
-    case '冷知识':
-      if (q.format === 'tf') {
-        return [
-          /^游戏实况类视频数量最多/,
-          /^翻唱\/音乐类视频总播放量高于直播录像类/,
-          /^“warma”标签的出现次数超过“沃玛”标签/,
-          /^当前弹幕总榜第一是“awsl”/,
-          /^Warma 主号粉丝数已经超过 500 万/,
-          /^Warma 的主号等级和小号等级都是 6 级/,
-          /^Warma 的主号和小号简介里都写了同一个合作邮箱/,
-        ].some(re => re.test(text));
-      }
-      return /^Warma (主号|小号|视频中最常合作|主号和小号加起来粉丝|的微博账号|的第一次出国|和怒九合作的第一首合唱|早期的自制游戏《良》|早期自制游戏《良》|的《我的小鲨鱼》游戏开发周期|和 CB 合作的第一首原创曲|主号的 B 站等级)/.test(text) ||
-        /^在《我家里有蜘蛛！！！》和《只需要3秒的歌》中，CB 是谁/.test(text) ||
-        /^《(我喜欢爱酱！！（绊爱面试）|我为小朋友们制作了几个高兴的东西|怎么办！我现在好怕被2233娘封号)/.test(text);
-
-    case '视频内容':
-      // 剔除近作游戏类型模板、跨栏目重复的工作分工/游戏展题，以及单纯靠数据反推的评论量题。
-      return !/^(《REANIMAL|《Subnautica2：异星水域》|《双影奇境》|《星露谷！田园开荒生活！》)/.test(text) &&
-        !/^《轨道双子星》里，谁负责/.test(text) &&
-        !/^《出国！去逛全球最大的游戏展吧！》说的是哪一个游戏展/.test(text) &&
-        !/^《我在国外到处胡说八道【爆米花电台04】》的电台类型/.test(text) &&
-        !/^Warma 的哪期视频获得了超过 16,000 条评论/.test(text);
-
-    case '考古经典':
-      return /最早的(游戏实况|翻唱\/音乐|直播录像|绘画\/手书|爆炸电台|生活日常|配音\/小剧场)内容/.test(text) ||
-        /最早出现与「(奥日与黑暗森林|动物之森|沃玛的生活)」相关内容/.test(text) ||
-        /旧视频里，弹幕“(梦开始的地方|考古|awsl)”出现最多/.test(text);
-
-    default:
-      return false;
-  }
+const normalizeOption = value => String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const commentLikes = q => {
+  const match = (q.explanation || '').match(/(?:获(?:得了?)?|有)(?:超过\s*)?\s*([\d,.]+)\s*(万)?\s*(?:个)?赞/);
+  return match ? Number(match[1].replace(/,/g, '')) * (match[2] ? 10000 : 1) : 0;
 };
+const validQuestionShape = q => {
+  if (!q || !knownCategories.has(q.category) || !['easy', 'medium', 'hard'].includes(q.difficulty)) return false;
+  if (typeof q.q !== 'string' || q.q.trim().length < 10) return false;
+  if (typeof q.explanation !== 'string' || q.explanation.trim().length < 16) return false;
+  if (!Array.isArray(q.options) || !Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) return false;
+  const expectedOptions = q.format === 'tf' ? 2 : q.format === 'mc' ? 4 : 0;
+  if (!expectedOptions || q.options.length !== expectedOptions) return false;
+  const options = q.options.map(normalizeOption);
+  if (options.some(option => !option) || new Set(options).size !== options.length) return false;
+  if (q.format === 'tf' && !(options.includes('正确') && options.includes('错误'))) return false;
+  return true;
+};
+const isQualityQuestion = q => {
+  if (!validQuestionShape(q) || lowQualityPatterns.some(re => re.test(q.q))) return false;
+  if (/排行榜/.test(q.q) || /标签的平均单视频/.test(q.q)) return false;
+  if (/点赞最高(?:的)?评论(?:是谁发的|来自谁)/.test(q.q) && commentLikes(q) < 10000) return false;
+  return true;
+};
+
+const templateLimits = [
+  [/评论区里点赞最高的评论是谁发的|点赞最高(?:的)?评论(?:是谁发的|来自谁)/, 10],
+  [/弹幕.*出现次数最高的名梗|里出现次数最多的弹幕/, 8],
+  [/^《.+》是和谁一起玩的游戏[？?]$/, 4],
+  [/^《.+》的游戏类型是什么[？?]$/, 4],
+  [/在 \d{4} 年发布的全部视频里/, 30],
+  [/在「.+」类视频里/, 16],
+  [/在 2015–2021 的考古视频里/, 18],
+  [/2015–2021.*最早的|2015–2021.*最早出现/, 12],
+  // 逐对列举的指标/标签/弹幕大小关系，控制数量，避免整份题库都是判断题。
+  [/的(?:播放量|点赞数|弹幕数|投币数|收藏数|分享数|评论\/回复数)高于/, 4],
+  [/标签的出现次数高于/, 4],
+  [/弹幕总榜中，.+高于/, 6],
+];
+const templateCounts = new Map();
+const categoryLimits = {
+  '数据之最': 95,
+  '发布规律': 45,
+  '标签与分类': 45,
+  '梗与弹幕': 45,
+  '字幕探索': 50,
+  '评论区': 55,
+  '深度对比': 40,
+  '冷知识': 90,
+  '视频内容': 85,
+  '考古经典': 60,
+};
+const categoryCounts = new Map();
 
 questions.forEach(q => {
   if (seenQuestion.has(q.q)) return;
   seenQuestion.add(q.q);
-  if (isQualityQuestion(q)) finalQuestions.push(q);
+  if (!isQualityQuestion(q)) return;
+  const template = templateLimits.find(([pattern]) => pattern.test(q.q));
+  if (template && (templateCounts.get(template[0]) || 0) >= template[1]) return;
+  if ((categoryCounts.get(q.category) || 0) >= categoryLimits[q.category]) return;
+  if (template) templateCounts.set(template[0], (templateCounts.get(template[0]) || 0) + 1);
+  categoryCounts.set(q.category, (categoryCounts.get(q.category) || 0) + 1);
+  finalQuestions.push(q);
 });
 
 // ─── Output ───

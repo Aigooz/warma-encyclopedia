@@ -24,6 +24,7 @@
         <a href="#explore">探索</a>
         <a href="#danmaku">弹幕考古</a>
         <a href="#rank">榜单</a>
+        <a href="#weibo">微博</a>
         <a href="#quiz">答题</a>
         <a href="#videos">全部视频</a>
       </nav>
@@ -230,6 +231,11 @@
       </div>
     </section>
 
+    <section id="weibo">
+      <div class="sec-head"><h2>微博动态</h2><p>两位 UP 主近期发布的公开微博 · 点击卡片打开原文</p><div class="sec-line"></div></div>
+      <div id="weiboList" class="weibo-wrap panel"></div>
+    </section>
+
     <section id="quiz">
       <div class="sec-head"><h2>Warma 百科问答</h2><p>你对沃玛的了解有多少？来挑战一下！</p><div class="sec-line"></div></div>
       <div class="quiz-wrap panel">
@@ -240,7 +246,7 @@
             <p>基于百科数据自动生成 · 涵盖数据之最、发布规律、名梗弹幕、字幕深度、评论区与冷知识</p>
             <div class="quiz-stats-row">
               <div class="quiz-stat"><b id="quizTotalQ">—</b><span>道题</span></div>
-              <div class="quiz-stat"><b>10</b><span>个分类</span></div>
+              <div class="quiz-stat"><b id="quizCategoryTotal">—</b><span>个分类</span></div>
               <div class="quiz-stat"><b>3</b><span>档难度</span></div>
               <div class="quiz-stat"><b>2</b><span>种题型</span></div>
             </div>
@@ -249,6 +255,15 @@
               <button class="quiz-diff-btn" data-diff="easy">简单</button>
               <button class="quiz-diff-btn" data-diff="medium">中等</button>
               <button class="quiz-diff-btn" data-diff="hard">困难</button>
+            </div>
+            <div class="quiz-length-row">
+              <span>每局题数</span>
+              <div class="quiz-length-select" role="group" aria-label="每局题数">
+                <button class="quiz-length-btn" data-length="10" aria-pressed="false">10</button>
+                <button class="quiz-length-btn active" data-length="20" aria-pressed="true">20</button>
+                <button class="quiz-length-btn" data-length="30" aria-pressed="false">30</button>
+                <button class="quiz-length-btn" data-length="50" aria-pressed="false">50</button>
+              </div>
             </div>
             <div class="quiz-cat-select">
               <button class="quiz-cat-btn active" data-cat="all">全部分类</button>
@@ -263,6 +278,7 @@
               <button class="quiz-cat-btn" data-cat="视频内容">视频内容</button>
               <button class="quiz-cat-btn" data-cat="考古经典">考古经典</button>
             </div>
+            <p class="quiz-pool-summary" id="quizPoolSummary" aria-live="polite"></p>
             <button class="btn quiz-start-btn" id="quizStartBtn">开始答题</button>
           </div>
         </div>
@@ -344,7 +360,7 @@
     </div>
 <script defer src="vendor/echarts.min.js?v=46"></script>
 <script defer src="data.js?v=46"></script>
-<script defer src="data-quiz.js?v=47"></script>
-<script defer src="app.js?v=46"></script>
+<script defer src="data-quiz.js?v=49"></script>
+<script defer src="app.js?v=47"></script>
 </body>
 </html>
