@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-12T13:23:41+08:00",
+ "updated_at": "2026-11-12T14:18:34+08:00",
  "accounts": {
   "warma": {
    "uid": "1782488734",
@@ -3485,7 +3485,8 @@
      "first_seen": "2026-11-12T13:09:32+08:00"
     }
    ],
-   "last_sync": "2026-11-12T13:11:23+08:00"
+   "last_sync": "2026-11-12T13:11:23+08:00",
+   "avatar": "https://tvax2.sinaimg.cn/crop.0.0.600.600.180/6a3e9e9ely8hobt1otu99j20go0gowgh.jpg"
   },
   "nujiu": {
    "uid": "5584883348",
@@ -6177,7 +6178,8 @@
      "first_seen": "2026-11-12T13:09:32+08:00"
     }
    ],
-   "last_sync": "2026-11-12T13:23:33+08:00"
+   "last_sync": "2026-11-12T13:23:33+08:00",
+   "avatar": "https://tvax2.sinaimg.cn/crop.0.0.996.996.180/0065XBhGly8ggxg9cwb13j30ro0ro40q.jpg"
   }
  }
 }

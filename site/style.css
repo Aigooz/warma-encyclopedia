@@ -210,18 +210,29 @@ tr.clickable:hover{background:color-mix(in srgb,var(--pink) 7%,transparent)}
 /* 微博动态模块：每个账号一栏，卡片式列出近期公开微博。 */
 .weibo-wrap { display: grid; gap: 18px; }
 .weibo-account { display: grid; gap: 10px; }
-.weibo-title { font-weight: 700; font-size: 15px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.weibo-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.weibo-head-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); flex: 0 0 34px; }
+.weibo-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); flex: 0 0 40px; }
+.weibo-who { display: flex; flex-direction: column; min-width: 0; }
+.weibo-who b { font-size: 14px; }
 .weibo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
 .weibo-item { display: grid; gap: 6px; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 12px; color: var(--text); text-decoration: none; transition: border-color .18s ease, transform .18s ease; }
 .weibo-item:hover { border-color: var(--pink); transform: translateY(-1px); }
-.weibo-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.weibo-head { display: flex; align-items: center; gap: 10px; }
 .weibo-text { font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; }
 .weibo-item { cursor: pointer; }
 .weibo-pics { display: grid; gap: 8px; margin: 12px 0; }
 .weibo-pic { width: 100%; max-height: 420px; object-fit: contain; border-radius: 10px; background: rgba(255,255,255,.04); }
-.weibo-replies { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.05); display: grid; gap: 6px; }
+.weibo-replies { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); display: grid; gap: 6px; }
 .weibo-reply { font-size: 12px; line-height: 1.5; }
 .modal-sub { margin: 18px 0 6px; font-size: 15px; }
+.weibo-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.weibo-detail-text { font-size: 15px; line-height: 1.75; }
+.weibo-detail-bar { display: flex; margin: 14px 0 4px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.weibo-detail-bar span { flex: 1; text-align: center; }
+.comment { display: flex; gap: 10px; align-items: flex-start; }
+.weibo-comment-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); flex: 0 0 30px; }
+.weibo-comment-body { flex: 1; min-width: 0; }
 @media (max-width: 720px) {
   .weibo-grid { grid-template-columns: 1fr; }
 }
